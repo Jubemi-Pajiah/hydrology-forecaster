@@ -49,8 +49,8 @@ except Exception:
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 RESULTS_PATH = ROOT / "data" / "results.json"
-BASIN_LAT    = 31.56
-BASIN_AREA   = 1779.30
+BASIN_LAT    = 7.5
+BASIN_AREA   = 22800.0
 MMDAY_TO_M3S = BASIN_AREA * 1e6 / 86400.0 / 1000.0
 
 # Design system palette (Data-Dense Dashboard)
@@ -290,17 +290,17 @@ st.markdown(
 results = load_results()
 params  = results["params"]
 Smax    = params["Smax"]
-q_mean  = results["data_stats"]["q_obs"]["mean"]
+q_mean  = results.get("q_sim_mean", results.get("data_stats", {}).get("q_obs", {}).get("mean", 50.0))
 
 with st.spinner("Compiling model (first run only — a few seconds)…"):
     _compile_numba()
 
 # ── Page header ────────────────────────────────────────────────────────────────
-st.title("Conecuh River Streamflow Forecaster")
+st.title("Ogun-Osun River Streamflow Forecaster")
 st.markdown(
     f"""<div class="app-intro">
-    A calibrated <strong>two-bucket lumped hydrological model</strong> (CAMELS basin 02361000,
-    Conecuh River, Alabama) generates short-term streamflow forecasts from weather inputs.
+    A <strong>two-bucket lumped hydrological model</strong> with parameters transferred from a
+    donor basin generates short-term streamflow forecasts for the <strong>Ogun-Osun River Basin, Nigeria</strong>.
     Enter the <strong>forecast horizon</strong> and expected daily conditions in the sidebar,
     then press <strong>Run Forecast</strong>.<br>
     <strong>Required per day:</strong> Rainfall (mm), max/min air temperature (°C) &nbsp;|&nbsp;
@@ -469,7 +469,7 @@ if run_btn:
     ax.set_xlabel("Forecast Day", fontsize=11, color=COLOR_TEXT, labelpad=8)
     ax.set_ylabel("Discharge (m³/s)", fontsize=11, color=COLOR_TEXT, labelpad=8)
     ax.set_title(
-        "Predicted Streamflow  —  Conecuh River (CAMELS 02361000)",
+        "Predicted Streamflow  —  Ogun-Osun River Basin, Nigeria",
         fontsize=12, fontweight="bold", color=COLOR_TEXT, pad=12,
     )
     ax.set_xticks(days_x)
@@ -512,9 +512,9 @@ if run_btn:
             )
 
     st.caption(
-        f"Calibration NSE: **{results['cal_nse']:.4f}** (Acceptable, 0.50–0.65)  |  "
-        f"Validation NSE: **{results['val_nse']:.4f}**  |  "
-        f"Calibration period: 1980–2003  |  "
-        f"Basin: Conecuh River, Alabama  |  "
-        f"Source: CAMELS US (Newman et al., 2015)"
+        f"Parameters transferred from Conecuh River donor basin (Alabama)  |  "
+        f"Mean simulated Q: **{results.get('q_sim_mean', '—')} m³/s**  |  "
+        f"Basin: Ogun-Osun River Basin, Nigeria  |  "
+        f"Forcing: NASA POWER MERRA-2 (1990–2020)  |  "
+        f"Ungauged prediction mode"
     )

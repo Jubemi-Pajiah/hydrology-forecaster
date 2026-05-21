@@ -88,9 +88,13 @@ def forecast_horizon(
             q_seg  = run_model(prcp_k, pet_k, params, S0=S_i, G0=G_i)
             q_fcst[t] = q_seg[-1]   # discharge on day t+k
 
-        q_obs_k = q_obs[k:]   # observed at t+k, aligned with q_fcst
-        nse_k   = nse(q_obs_k, q_fcst)
+        if q_obs is not None:
+            q_obs_k = q_obs[k:]
+            nse_k   = nse(q_obs_k, q_fcst)
+            print(f"  Lead {k} day: NSE = {nse_k:.4f}")
+        else:
+            nse_k = None
+            print(f"  Lead {k} day: mean Q_forecast = {q_fcst.mean():.4f} mm/day")
         results[k] = {"nse": nse_k, "q_forecast": q_fcst}
-        print(f"  Lead {k} day: NSE = {nse_k:.4f}")
 
     return results
