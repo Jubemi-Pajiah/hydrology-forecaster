@@ -4,6 +4,14 @@
 # Large raw data — do not commit
 basin_timeseries_v1p2_metForcing_obsFlow.zip
 data/*.csv
+POWER_Point_Daily_19900101_20201231_007d50N_003d50E_LST.csv
+
+# Generated outputs — do not commit
+Chapter3_4_5_Hydrological_Forecasting.docx
+
+# Project tooling — do not commit
+PROJECT_CONTEXT.md
+write_document.py
 
 # Python
 __pycache__/

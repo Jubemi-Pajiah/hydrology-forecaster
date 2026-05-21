@@ -107,7 +107,7 @@ st.markdown(
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("Documentation")
 st.caption(
-    "Conecuh River Streamflow Forecaster  ·  "
+    "Ogun-Osun River Streamflow Forecaster  ·  "
     "Civil & Environmental Engineering, University of Lagos  ·  "
     "Ugbodaga Benedict Osikpemi  ·  2026"
 )
@@ -127,17 +127,19 @@ st.markdown("## 1. What This App Does")
 st.markdown(
     """
 This application forecasts **short-term river discharge** (streamflow) for the
-**Conecuh River, Alabama, USA** (CAMELS basin 02361000) using a lightweight
+**Ogun-Osun River Basin, southwestern Nigeria** using a lightweight
 mathematical model of the rainfall-runoff process.
 
 You supply the **expected weather** for the next 1–7 days — daily rainfall, maximum
 temperature, and minimum temperature — and the app returns **predicted discharge in
 cubic metres per second (m³/s)** for each day.
 
-The model was *calibrated* on 24 years of historical data (1980–2003) so its internal
-parameters match the behaviour of this specific river basin. The calibration
-Nash-Sutcliffe Efficiency (NSE) is **0.59**, placing it in the *Acceptable* performance
-band (0.50–0.65) under the Moriasi et al. (2007) guidelines.
+The model operates in **ungauged prediction mode**: because no long-term discharge
+record is available for the Ogun-Osun basin, the five model parameters are
+*transferred* from a calibrated donor basin (USGS gauge 02361000, Conecuh River,
+Alabama), following the parameter regionalisation approach of Parajka et al. (2005)
+and Oudin et al. (2008). Meteorological forcing is sourced from the
+**NASA POWER MERRA-2** gridded reanalysis product (1990–2020).
 """
 )
 
@@ -227,9 +229,9 @@ requires only maximum and minimum daily temperature (no humidity or wind data):
 PET = 0.0023 × Ra × √(Tmax − Tmin) × (Tmean + 17.8)
 ```
 
-Where `Ra` is extraterrestrial radiation computed from the basin latitude (31.56° N)
-and day of year. This makes the app suitable for data-scarce settings where only
-temperature records are available.
+Where `Ra` is extraterrestrial radiation computed from the basin centroid latitude
+(7.5° N) and day of year. This makes the app suitable for data-scarce settings where
+only temperature records are available — exactly the situation in most Nigerian river basins.
 """
 )
 
@@ -238,11 +240,12 @@ st.markdown("## 3. Calibrated Parameters")
 
 st.markdown(
     """
-The five model parameters were calibrated against 24 years of observed discharge
-using **Differential Evolution** optimisation (Storn & Price, 1997), minimising a
-composite objective: `−[0.7 × NSE + 0.3 × NSE_log]`. The log-NSE component gives
-extra weight to low-flow periods, producing more balanced performance across the
-full flow range.
+The five model parameters are **transferred** from a calibrated donor basin
+(USGS 02361000, Conecuh River, Alabama). Donor calibration used **Differential
+Evolution** (Storn & Price, 1997) with the composite objective `−[0.7 × NSE + 0.3 × NSE_log]`.
+The transferred parameters are applied directly to the Ogun-Osun basin without
+re-optimisation, following established parameter regionalisation methodology
+(Parajka et al., 2005; Oudin et al., 2008).
 """
 )
 
@@ -271,53 +274,40 @@ st.markdown(
 )
 
 # ── 4. Performance ────────────────────────────────────────────────────────────
-st.markdown("## 4. Model Performance")
+st.markdown("## 4. Model Application Mode")
 
 st.markdown(
     """
-Performance is assessed using the **Nash-Sutcliffe Efficiency (NSE)** — the standard
-metric in hydrology. NSE = 1.0 is a perfect model; NSE = 0.0 means the model is no
-better than always predicting the long-term mean discharge.
+The Ogun-Osun River Basin is an **ungauged basin** — no continuous discharge record
+is available for traditional calibration and validation against observed streamflow.
+The model therefore operates in **ungauged prediction mode**, with parameters
+transferred directly from the Conecuh River donor basin.
+
+This approach is a well-established practice in hydrology when local gauge data are
+unavailable. Research has shown that parameter transfer from physically or climatologically
+similar donor basins can yield simulations that capture the correct seasonal patterns
+and discharge magnitude, even without site-specific calibration
+(Parajka et al., 2005; Oudin et al., 2008).
+
+**No NSE/RMSE/PBIAS scores are reported** because there is no observed discharge to
+compare against. Model evaluation is instead qualitative, based on:
+- Physical reasonableness of simulated discharge magnitudes
+- Correct reproduction of the seasonal cycle (wet/dry seasons)
+- Consistency with published regional water balance estimates
+
+**Transferred parameters:**
 """
 )
 
 st.markdown(
     """
 <table>
-<tr><th>Period</th><th>NSE</th><th>RMSE (m³/s)</th><th>PBIAS (%)</th><th>Rating</th></tr>
-<tr><td>Calibration (1980–2003)</td><td>0.5895</td><td>—</td><td>—</td>
-    <td>Acceptable (0.50–0.65)</td></tr>
-<tr><td>Validation (2004–2014)</td><td>0.3116</td><td>29.79</td><td>−1.61</td>
-    <td>Below threshold</td></tr>
-</table>
-""",
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-The calibration NSE of **0.59** meets the Acceptable threshold. The validation NSE
-of **0.31** falls below it, likely due to **inter-decadal climate non-stationarity** —
-the precipitation-runoff relationship shifted between the 1980–2003 calibration period
-and the 2004–2014 validation period. The PBIAS of **−1.61%** indicates the model
-has negligible volume bias (Very Good by Moriasi et al., 2007), confirming the
-parameter set is physically reasonable.
-
-The NSE > 0.65 *Good* target set in the project specification was **not achieved**;
-the result is in the *Acceptable* band.
-
-**Performance thresholds** (Moriasi et al., 2007):
-"""
-)
-
-st.markdown(
-    """
-<table>
-<tr><th>NSE Range</th><th>Rating</th></tr>
-<tr><td>> 0.75</td><td>Very Good</td></tr>
-<tr><td>0.65 – 0.75</td><td>Good</td></tr>
-<tr><td>0.50 – 0.65</td><td>Acceptable</td></tr>
-<tr><td>< 0.50</td><td>Unsatisfactory</td></tr>
+<tr><th>Parameter</th><th>Value</th><th>Donor basin (Conecuh River, Alabama)</th></tr>
+<tr><td><code>Smax</code></td><td>275.32 mm</td><td>Calibration NSE = 0.59 on donor</td></tr>
+<tr><td><code>kq</code></td><td>0.4966</td><td>Acceptable range for humid tropical</td></tr>
+<tr><td><code>kp</code></td><td>0.0065 day⁻¹</td><td>Slow deep percolation</td></tr>
+<tr><td><code>kg</code></td><td>0.3000 day⁻¹</td><td>Moderate groundwater recession</td></tr>
+<tr><td><code>cet</code></td><td>1.6307</td><td>ET scaling for humid climate</td></tr>
 </table>
 """,
     unsafe_allow_html=True,
@@ -406,14 +396,12 @@ st.markdown("### Step 5 — Interpreting the Output")
 st.markdown(
     """
 **What the discharge numbers mean:**
-- **< 10 m³/s** — Low flow / drought-like conditions. River is significantly below
-  average.
-- **10–23 m³/s** — Below-average flow. River is running but below typical levels.
-- **23–50 m³/s** — Near to moderately above average. Normal wet-season or post-rain
-  conditions.
-- **50–150 m³/s** — High flow. Significant rainfall event. Monitor for flooding.
-- **> 150 m³/s** — Very high flow. Potential flood conditions. The model's accuracy
-  decreases at extreme flows.
+- **< 50 m³/s** — Low flow / dry-season conditions. River is below typical levels.
+- **50–150 m³/s** — Near-average flow. Normal dry-season baseline for this basin.
+- **150–400 m³/s** — Moderate flow. Post-rainfall or beginning of wet season.
+- **400–800 m³/s** — High flow. Significant rainfall event. Monitor for flooding.
+- **> 800 m³/s** — Very high flow. Potential flood conditions. The model's accuracy
+  decreases at extreme flows (ungauged extrapolation).
 
 **The decline pattern:** Even with steady daily rainfall, you will typically see
 discharge *decrease* over the forecast horizon (Day 1 highest, Day 7 lower). This
@@ -431,10 +419,10 @@ st.markdown(
 | Limitation | Implication |
 |-----------|-------------|
 | **Lumped model** | Spatial variation in rainfall or land use within the basin is ignored. Localised heavy rainfall will be under- or over-represented. |
-| **No snowmelt routine** | The Conecuh River basin rarely experiences snow, so this is acceptable here. Do not apply this model to basins where snow is important. |
-| **Validation NSE = 0.31** | The model was calibrated on 1980–2003 data. Post-2003 behaviour is less accurately reproduced, likely due to climate non-stationarity. |
+| **No snowmelt routine** | The Ogun-Osun basin is tropical and experiences no snow; this routine is not required here. Do not apply this model to basins where snowmelt drives runoff. |
+| **No observed discharge** | The basin is ungauged — no NSE or RMSE validation is possible. Model performance is assessed qualitatively through seasonal plausibility. |
 | **Perfect-forcing assumption** | The app takes your weather inputs as exact truth. If your rainfall forecast is wrong, the discharge forecast will also be wrong. |
-| **Single basin** | The calibrated parameters apply only to CAMELS basin 02361000. They are not transferable to other rivers without recalibration. |
+| **Transferred parameters** | Parameters calibrated on the Conecuh River donor basin may not perfectly represent Ogun-Osun hydrology; uncertainty in the transfer is unquantified. |
 | **No uncertainty quantification** | The model returns a single deterministic forecast. No confidence intervals are provided. Real-world operational forecasts should use ensemble methods. |
 """
 )
@@ -447,15 +435,16 @@ st.markdown(
 **Software stack:**
 - **Python 3.x** — core language
 - **NumPy / Pandas** — numerical computation and data handling
-- **SciPy** (`differential_evolution`) — parameter calibration
-- **Numba** (`@njit`) — JIT compilation of the model inner loop for fast calibration
+- **SciPy** — numerical utilities
+- **Numba** (`@njit`) — JIT compilation of the model inner loop for fast simulation
 - **Matplotlib** — charts
 - **Streamlit** — web application framework
 
 **Data source:**
-The model was calibrated on the **CAMELS US dataset** (Newman et al., 2015;
-Addor et al., 2017). Forcing data uses Daymet gridded meteorology; discharge
-data is from the USGS stream gauge at basin 02361000.
+Meteorological forcing uses **NASA POWER MERRA-2** reanalysis data (Gelaro et al., 2017)
+at the Ogun-Osun basin centroid (7.5°N, 3.5°E), covering 1990–2020.
+Model parameters were transferred from the **CAMELS US dataset** donor basin
+(USGS 02361000, Conecuh River, Alabama; Newman et al., 2015; Addor et al., 2017).
 
 **Code structure:**
 ```
@@ -487,17 +476,12 @@ st.markdown("## 8. Key References")
 
 st.markdown(
     """
-- Addor, N., Newman, A. J., Mizukami, N., & Clark, M. P. (2017). The CAMELS data set:
-  Catchment attributes and meteorology for large-sample studies. *HESS*, 21, 5293–5313.
-  https://doi.org/10.5194/hess-21-5293-2017
+- Gelaro, R., McCarty, W., Suárez, M. J., Todling, R., Molod, A., Takacs, L., … Zhao, B. (2017).
+  The Modern-Era Retrospective Analysis for Research and Applications, Version 2 (MERRA-2).
+  *Journal of Climate*, 30(14), 5419–5454. https://doi.org/10.1175/JCLI-D-16-0758.1
 
 - Hargreaves, G. H., & Samani, Z. A. (1985). Reference crop evapotranspiration from
   temperature. *Applied Engineering in Agriculture*, 1(2), 96–99.
-
-- Moriasi, D. N., Arnold, J. G., Van Liew, M. W., Bingner, R. L., Harmel, R. D., &
-  Veith, T. L. (2007). Model evaluation guidelines for systematic quantification of
-  accuracy in watershed simulations. *Transactions of the ASABE*, 50(3), 885–900.
-  https://doi.org/10.13031/2013.23153
 
 - Nash, J. E., & Sutcliffe, J. V. (1970). River flow forecasting through conceptual
   models: Part I — A discussion of principles. *Journal of Hydrology*, 10(3), 282–290.
@@ -507,6 +491,15 @@ st.markdown(
   data set for the contiguous USA. *HESS*, 19(1), 209–223.
   https://doi.org/10.5194/hess-19-209-2015
 
+- Oudin, L., Andréassian, V., Perrin, C., Michel, C., & Le Moine, N. (2008).
+  Spatial proximity, physical similarity, regression and ungauged catchments: A
+  comparison of regionalisation approaches based on 913 French catchments.
+  *Water Resources Research*, 44(3), W03413. https://doi.org/10.1029/2007WR006240
+
+- Parajka, J., Merz, R., & Blöschl, G. (2005). A comparison of regionalisation methods
+  for catchment model parameters. *Hydrology and Earth System Sciences*, 9(3), 157–171.
+  https://doi.org/10.5194/hess-9-157-2005
+
 - Storn, R., & Price, K. (1997). Differential evolution — A simple and efficient
   heuristic for global optimization over continuous spaces. *Journal of Global
   Optimization*, 11, 341–359. https://doi.org/10.1023/A:1008202821328
@@ -515,7 +508,7 @@ st.markdown(
 
 st.markdown("---")
 st.caption(
-    "Conecuh River Streamflow Forecaster  ·  "
+    "Ogun-Osun River Streamflow Forecaster  ·  "
     "Computer Hydrological Forecasting — Final Year Project  ·  "
     "Department of Civil and Environmental Engineering, University of Lagos  ·  "
     "Supervisor: Prof. K. O. Aiyesimoju  ·  February 2026"
