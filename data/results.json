@@ -1,42 +1,185 @@
 {
-  "params": {
-    "Smax": 275.323022,
-    "kq": 0.496622,
-    "kp": 0.006545,
-    "kg": 0.3,
-    "cet": 1.63066
-  },
-  "q_sim_mean": 346.4038,
-  "q_sim_max": 26167.671,
-  "q_sim_min": 7.2568,
-  "q_sim_std": 660.8438,
-  "data_stats": {
-    "prcp": {
-      "mean": 4.4976,
-      "std": 6.636,
-      "min": 0.0,
-      "max": 182.71
+  "basin": "Conecuh River, Alabama (USGS 02361000)",
+  "model": "ARIMA(3, 1, 2)",
+  "differencing_d": 1,
+  "aic": -24909.01,
+  "bic": -24859.47,
+  "phi": [
+    0.708801,
+    0.151453,
+    -0.131495
+  ],
+  "theta": [
+    -0.409097,
+    -0.462824
+  ],
+  "constant": -5e-06,
+  "aic_ranking": [
+    {
+      "order": [
+        3,
+        1,
+        2
+      ],
+      "aic": -24909.01,
+      "bic": -24859.47
     },
-    "tmax": {
-      "mean": 29.3857,
-      "std": 1.6689,
-      "min": 23.98,
-      "max": 35.74
+    {
+      "order": [
+        4,
+        1,
+        2
+      ],
+      "aic": -24907.44,
+      "bic": -24850.82
     },
-    "tmin": {
-      "mean": 21.7527,
-      "std": 1.8325,
-      "min": 11.06,
-      "max": 24.94
+    {
+      "order": [
+        1,
+        1,
+        2
+      ],
+      "aic": -24838.3,
+      "bic": -24802.9
     },
-    "pet": {
-      "mean": 3.95,
-      "std": 0.5482,
-      "min": 2.1504,
-      "max": 6.3742
+    {
+      "order": [
+        4,
+        1,
+        1
+      ],
+      "aic": -24819.82,
+      "bic": -24770.27
+    },
+    {
+      "order": [
+        3,
+        1,
+        1
+      ],
+      "aic": -24771.13,
+      "bic": -24728.66
     }
+  ],
+  "ljung_box": {
+    "stat": 18.704,
+    "pvalue": 0.2275
   },
-  "fcst_1d_mean": 384.8433,
-  "fcst_2d_mean": 382.2051,
-  "fcst_3d_mean": 381.0705
+  "arch": {
+    "stat": 108.447,
+    "pvalue": 0.0
+  },
+  "jarque_bera": {
+    "stat": 152867.0927,
+    "pvalue": 0.0,
+    "skew": 3.229,
+    "kurtosis": 22.4168
+  },
+  "roots": {
+    "ar": [
+      1.778,
+      1.778,
+      2.405
+    ],
+    "ma": [
+      1.093,
+      1.977
+    ]
+  },
+  "smearing_factor": 1.0414,
+  "discharge_stats": {
+    "mean": 23.446,
+    "min": 0.991,
+    "max": 2044.473,
+    "std": 42.825
+  },
+  "forecast": {
+    "1": {
+      "bias_factor": 1.0295,
+      "model": {
+        "NSE": 0.8241,
+        "RMSE": 14.9077,
+        "PBIAS": 0.9973,
+        "MAE": 4.855,
+        "R2": 0.8281,
+        "PSS": 0.2239,
+        "rating": "Very Good"
+      },
+      "median": {
+        "NSE": 0.8267,
+        "RMSE": 14.7957,
+        "PBIAS": -1.8966,
+        "MAE": 4.559,
+        "R2": 0.8281,
+        "PSS": 0.2355,
+        "rating": "Very Good"
+      },
+      "persistence": {
+        "NSE": 0.7734,
+        "RMSE": 16.9216,
+        "PBIAS": 0.0115,
+        "MAE": 5.3089,
+        "R2": 0.7862,
+        "rating": "Very Good"
+      }
+    },
+    "2": {
+      "bias_factor": 1.0813,
+      "model": {
+        "NSE": 0.5414,
+        "RMSE": 24.0741,
+        "PBIAS": 0.413,
+        "MAE": 8.638,
+        "R2": 0.5522,
+        "PSS": 0.2442,
+        "rating": "Acceptable"
+      },
+      "median": {
+        "NSE": 0.5487,
+        "RMSE": 23.8837,
+        "PBIAS": -7.1381,
+        "MAE": 7.8412,
+        "R2": 0.5522,
+        "PSS": 0.2561,
+        "rating": "Acceptable"
+      },
+      "persistence": {
+        "NSE": 0.3933,
+        "RMSE": 27.6912,
+        "PBIAS": 0.0218,
+        "MAE": 9.229,
+        "R2": 0.4853,
+        "rating": "Unsatisfactory"
+      }
+    },
+    "3": {
+      "bias_factor": 1.1276,
+      "model": {
+        "NSE": 0.3472,
+        "RMSE": 28.7274,
+        "PBIAS": 0.1477,
+        "MAE": 10.9587,
+        "R2": 0.3668,
+        "PSS": 0.2671,
+        "rating": "Unsatisfactory"
+      },
+      "median": {
+        "NSE": 0.359,
+        "RMSE": 28.4664,
+        "PBIAS": -11.1852,
+        "MAE": 9.8136,
+        "R2": 0.3668,
+        "PSS": 0.2803,
+        "rating": "Unsatisfactory"
+      },
+      "persistence": {
+        "NSE": 0.1093,
+        "RMSE": 33.5553,
+        "PBIAS": 0.031,
+        "MAE": 11.7351,
+        "R2": 0.3076,
+        "rating": "Unsatisfactory"
+      }
+    }
+  }
 }

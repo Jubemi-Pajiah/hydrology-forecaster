@@ -1,100 +1,85 @@
 """
-forecast.py — Multi-step ahead discharge forecasting.
+forecast.py — Multi-step-ahead streamflow forecasting and evaluation.
 
-For lead times 1, 2, 3 days, the model state at each day t is used to generate
-a forecast by running the model forward with observed forcing (perfect-forcing
-scenario — the standard benchmark for short-range hydrological forecasting).
+For each lead time k (1, 2, 3 days) the fitted ARIMA model produces a
+rolling-origin forecast over the validation period: at every day t it forecasts
+discharge at t+k using only discharge observed up to t. Forecasts are produced
+on the log scale and back-transformed to m3/s.
 
-The forecast NSE is computed over the validation period, comparing the
-t+k forecast to observed discharge at t+k.
+Two reference forecasts are evaluated for context:
+  * persistence : Q(t+k) = Q(t)   (the naive benchmark)
+  * the ARIMA model
+
+The persistence skill score quantifies how much the model improves on
+persistence.
 """
 
 import numpy as np
-import pandas as pd
 
-from .model import run_model
-from .metrics import nse
+from .metrics import evaluate
+from .model import ARIMA, ljung_box, jarque_bera, arch_test
+from .preprocess import inv_log_transform
 
 
-def forecast_horizon(
-    prcp: np.ndarray,
-    pet: np.ndarray,
-    q_obs: np.ndarray,
-    params: dict,
-    lead_times: list = (1, 2, 3),
-    state_S0: float = None,
-    state_G0: float = None,
-) -> dict:
+def forecast_evaluation(model: ARIMA, log_full: np.ndarray, flow_full: np.ndarray,
+                        valid_start_idx: int, lead_times=(1, 2, 3)) -> dict:
     """
-    Generate multi-step-ahead discharge forecasts and evaluate NSE per lead time.
-
-    Strategy: Run the model through the full period to collect daily states.
-    Then for each day t, re-initialise from state(t) and run forward `k` steps
-    to obtain Q_forecast(t+k). Compare to Q_obs(t+k).
+    Evaluate the model and persistence over the validation period.
 
     Parameters
     ----------
-    prcp, pet   : forcing arrays (mm/day), length N
-    q_obs       : observed discharge (m³/s), length N
-    params      : calibrated parameter dict
-    lead_times  : list of integer lead times (days)
-    state_S0, state_G0 : initial states (warm-up already applied)
+    model            : ARIMA already fitted on the training (log) series
+    log_full         : full log-discharge series (train + validation)
+    flow_full        : full discharge series in m3/s (train + validation)
+    valid_start_idx  : index in the full series where validation begins
+    lead_times       : forecast lead times in days
 
     Returns
     -------
-    dict with keys like 1, 2, 3 mapping to {"nse": float, "q_forecast": array}
+    dict keyed by lead time, each with model metrics, persistence metrics and
+    the aligned observed/forecast arrays (m3/s) for plotting.
     """
-    Smax = params["Smax"]
-    kq   = params["kq"]
-    kp   = params["kp"]
-    kg   = params["kg"]
-    cet  = params["cet"]
-
-    N = len(prcp)
-    S0 = state_S0 if state_S0 is not None else Smax / 2.0
-    G0 = state_G0 if state_G0 is not None else 10.0
-
-    # Pass 1: run model and record daily states (S, G) at END of each day
-    S_arr = np.zeros(N + 1)
-    G_arr = np.zeros(N + 1)
-    S_arr[0] = S0
-    G_arr[0] = G0
-
-    S, G = S0, G0
-    for t in range(N):
-        ET     = cet * pet[t] * min(S / Smax, 1.0)
-        ET     = max(0.0, min(ET, S))
-        Qquick = kq * max(0.0, S - Smax)
-        Rperc  = kp * S
-        S      = max(0.0, S + prcp[t] - ET - Qquick - Rperc)
-        Qbase  = kg * G
-        G      = max(0.0, G + Rperc - Qbase)
-        S_arr[t + 1] = S
-        G_arr[t + 1] = G
-
+    flow_full = np.asarray(flow_full, dtype=float)
+    # k-step log-scale forecast variance, for the lognormal retransformation
+    # bias correction: E[Q] = exp(mu + sigma_k^2 / 2), not exp(mu) (the median).
+    logvar = model.kstep_logvar(max(lead_times))
     results = {}
     for k in lead_times:
-        # For each t from 0 to N-k-1, forecast at t+k
-        n_fcst = N - k
-        q_fcst = np.empty(n_fcst)
+        targets, preds_log = model.rolling_kstep(log_full, k, valid_start_idx)
+        var_k = logvar[k - 1]
+        q_pred = inv_log_transform(preds_log + 0.5 * var_k)   # bias-corrected mean
+        q_median = inv_log_transform(preds_log)               # uncorrected (median)
+        q_obs = flow_full[targets]
+        q_persist = flow_full[targets - k]
 
-        for t in range(n_fcst):
-            # Re-initialise from state at END of day t (i.e. start of t+1)
-            S_i = S_arr[t + 1]
-            G_i = G_arr[t + 1]
-            # Run k steps forward using observed forcing
-            prcp_k = prcp[t + 1 : t + 1 + k]
-            pet_k  = pet[t + 1 : t + 1 + k]
-            q_seg  = run_model(prcp_k, pet_k, params, S0=S_i, G0=G_i)
-            q_fcst[t] = q_seg[-1]   # discharge on day t+k
+        m_model = evaluate(q_obs, q_pred, q_persist=q_persist)
+        m_median = evaluate(q_obs, q_median, q_persist=q_persist)
+        m_persist = evaluate(q_obs, q_persist)
 
-        if q_obs is not None:
-            q_obs_k = q_obs[k:]
-            nse_k   = nse(q_obs_k, q_fcst)
-            print(f"  Lead {k} day: NSE = {nse_k:.4f}")
-        else:
-            nse_k = None
-            print(f"  Lead {k} day: mean Q_forecast = {q_fcst.mean():.4f} mm/day")
-        results[k] = {"nse": nse_k, "q_forecast": q_fcst}
-
+        results[k] = {
+            "targets": targets,
+            "q_obs": q_obs,
+            "q_pred": q_pred,
+            "q_median": q_median,
+            "q_persist": q_persist,
+            "logvar": float(var_k),
+            "bias_factor": float(np.exp(0.5 * var_k)),
+            "model": m_model,
+            "median": m_median,
+            "persistence": m_persist,
+        }
     return results
+
+
+def residual_diagnostics(model: ARIMA, lags: int = 20) -> dict:
+    """Full residual diagnostic suite on the in-sample one-step residuals:
+    Ljung-Box (autocorrelation), ARCH (volatility clustering), Jarque-Bera
+    (normality), and the AR/MA characteristic roots."""
+    df = model.p + model.q
+    return {
+        "ljung_box": ljung_box(model.resid_, lags=lags, model_df=df),
+        "arch": arch_test(model.resid_, lags=lags),
+        "jarque_bera": jarque_bera(model.resid_),
+        "roots": model.roots(),
+        "smearing_factor": model.smearing_factor(),
+    }
