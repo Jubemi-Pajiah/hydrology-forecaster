@@ -1,123 +1,152 @@
 """
-preprocess.py — Load NASA POWER daily data for the Ogun-Osun River Basin, Nigeria.
-Reads POWER_Point_Daily_19900101_20201231_007d50N_003d50E_LST.csv and builds
-a daily DataFrame for model simulation (ungauged basin — no observed discharge).
+preprocess.py — Load observed daily discharge for the Conecuh River, Alabama.
+
+Data source: CAMELS US dataset (Newman et al., 2015; Addor et al., 2017),
+USGS gauge 02361000, contained in
+    basin_timeseries_v1p2_metForcing_obsFlow.zip
+    -> basin_dataset_public_v1p2/usgs_streamflow/03/02361000_streamflow_qc.txt
+
+This project forecasts streamflow from its OWN past values (a univariate
+statistical time-series approach). No rainfall, temperature, or potential
+evapotranspiration is used. Discharge is the only variable.
+
+Pipeline:
+  1. Read the raw streamflow file from the CAMELS archive.
+  2. Convert discharge from ft3/s to m3/s (x 0.0283168).
+  3. Flag the USGS missing-data sentinel (-999) as NaN and fill the few short
+     gaps by time interpolation (< 1 % of the record).
+  4. Provide a natural-log transform helper (streamflow is strongly
+     right-skewed and heteroscedastic; modelling log-flow stabilises variance).
+  5. Split into a training period (1980-2003) and a validation period
+     (2004-2014).
 """
+
+import io
+import zipfile
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CSV_PATH = PROJECT_ROOT / "POWER_Point_Daily_19900101_20201231_007d50N_003d50E_LST.csv"
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-# Basin parameters — Ogun-Osun River Basin, southwestern Nigeria
-BASIN_LATITUDE_DEG = 7.5       # basin centroid latitude
-BASIN_AREA_KM2 = 22800.0       # approximate drainage area (km²)
+# CAMELS archive and the path of the Conecuh streamflow file inside it
+CAMELS_ZIP = PROJECT_ROOT / "basin_timeseries_v1p2_metForcing_obsFlow.zip"
+STREAMFLOW_MEMBER = (
+    "basin_dataset_public_v1p2/usgs_streamflow/03/02361000_streamflow_qc.txt"
+)
+# A cached extracted copy so the pipeline runs without the 3.4 GB archive
+CACHED_CSV = DATA_DIR / "conecuh_discharge.csv"
 
-# Unit conversion: Q [mm/day] → Q [m³/s]
-# Q [m³/s] = Q [mm/day] × Area [m²] / 86400 s/day / 1000 mm/m
-MMDAY_TO_M3S = BASIN_AREA_KM2 * 1e6 / 86400.0 / 1000.0   # ≈ 263.89
+# Basin / gauge metadata (Conecuh River near Brewton / at gauge 02361000)
+GAUGE_ID = "02361000"
+BASIN_NAME = "Conecuh River, Alabama, USA"
+BASIN_LATITUDE_DEG = 31.10        # approx. gauge latitude
+BASIN_AREA_KM2 = 3604.0           # approx. drainage area (km2)
+
+# Unit conversion: cubic feet per second -> cubic metres per second
+CFS_TO_M3S = 0.0283168
+
+# Calendar split between training (calibration) and validation periods
+TRAIN_END = "2003-12-31"
+VALID_START = "2004-01-01"
+
+# Small constant guarding the log transform (all observed flows are > 0,
+# but interpolation could in principle produce a non-positive value)
+LOG_EPS = 1e-3
 
 
-def load_nasa_power_csv(csv_path: Path = CSV_PATH) -> pd.DataFrame:
+def load_discharge(zip_path: Path = CAMELS_ZIP) -> pd.DataFrame:
     """
-    Load NASA POWER daily CSV.
-    File has an 11-line metadata header, then a data header row, then daily data.
-    Columns in data: YEAR, DOY, T2M_MAX, T2M_MIN, PRECTOTCORR
+    Load the Conecuh daily discharge series.
+
+    Returns a DataFrame indexed by date with columns:
+        flow_cfs : raw discharge (ft3/s), missing flagged as NaN
+        flow     : discharge converted to m3/s, short gaps interpolated
+        qc       : USGS quality flag (A approved, A:e estimated, M missing)
+
+    The function reads the cached CSV if present; otherwise it extracts the
+    streamflow file from the CAMELS archive and writes the cache.
     """
-    # Skip the 11-line metadata block; line 12 (index 11) is the header
-    df = pd.read_csv(csv_path, skiprows=11)
-    # Rename to standard names
-    df = df.rename(columns={
-        "T2M_MAX": "tmax",
-        "T2M_MIN": "tmin",
-        "PRECTOTCORR": "prcp",
-    })
-    # Build DatetimeIndex from YEAR + DOY (day-of-year)
-    df["date"] = pd.to_datetime(
-        df["YEAR"].astype(str) + df["DOY"].astype(str).str.zfill(3),
-        format="%Y%j",
+    if CACHED_CSV.exists():
+        df = pd.read_csv(CACHED_CSV, parse_dates=["date"]).set_index("date")
+        return df
+
+    if not zip_path.exists():
+        raise FileNotFoundError(
+            f"CAMELS archive not found at {zip_path} and no cached CSV at "
+            f"{CACHED_CSV}. Provide one of them to load the discharge series."
+        )
+
+    with zipfile.ZipFile(zip_path) as z:
+        raw = z.read(STREAMFLOW_MEMBER).decode("utf-8", "replace")
+
+    df = pd.read_csv(
+        io.StringIO(raw),
+        sep=r"\s+",
+        header=None,
+        names=["id", "year", "month", "day", "flow_cfs", "qc"],
     )
-    df = df.set_index("date")
-    df = df[["prcp", "tmax", "tmin"]]
-    # Replace NASA POWER missing-data sentinel with NaN
-    df = df.replace(-999, np.nan)
-    return df
+    df["date"] = pd.to_datetime(df[["year", "month", "day"]])
+    df = df.set_index("date").sort_index()
+
+    # USGS missing sentinel -> NaN
+    df["flow_cfs"] = df["flow_cfs"].replace(-999.0, np.nan)
+
+    # Convert to m3/s and fill the short gaps by time interpolation
+    flow = df["flow_cfs"] * CFS_TO_M3S
+    flow = flow.interpolate(method="time", limit_direction="both")
+    df["flow"] = flow
+
+    out = df[["flow_cfs", "flow", "qc"]].copy()
+    out.to_csv(CACHED_CSV, index=True, index_label="date")
+    return out
 
 
-def hargreaves_pet(tmax: np.ndarray, tmin: np.ndarray, tmean: np.ndarray,
-                   doy: np.ndarray, lat_deg: float) -> np.ndarray:
+def log_transform(flow: np.ndarray) -> np.ndarray:
+    """Natural log of discharge (variance-stabilising transform)."""
+    return np.log(np.maximum(np.asarray(flow, dtype=float), LOG_EPS))
+
+
+def inv_log_transform(log_flow: np.ndarray) -> np.ndarray:
+    """Inverse of :func:`log_transform` (back to m3/s)."""
+    return np.exp(np.asarray(log_flow, dtype=float))
+
+
+def build_dataset(zip_path: Path = CAMELS_ZIP) -> pd.DataFrame:
     """
-    Hargreaves & Samani (1985) potential evapotranspiration (mm/day).
-    PET = 0.0023 * Ra * (Tmax - Tmin)^0.5 * (Tmean + 17.8)
-    Ra estimated from latitude and day of year (Allen et al., 1998 formula).
+    Return the analysis-ready daily series 1980-2014 with columns:
+        flow     : observed discharge (m3/s)
+        log_flow : natural-log discharge
+    Index: continuous DatetimeIndex (gaps interpolated).
     """
-    lat_rad = np.deg2rad(lat_deg)
-    delta = 0.409 * np.sin(2 * np.pi * doy / 365 - 1.39)
-    omega_s = np.arccos(-np.tan(lat_rad) * np.tan(delta))
-    dr = 1 + 0.033 * np.cos(2 * np.pi * doy / 365)
-    Gsc = 0.0820  # solar constant MJ/m²/min
-    Ra_MJ = (24 * 60 / np.pi) * Gsc * dr * (
-        omega_s * np.sin(lat_rad) * np.sin(delta)
-        + np.cos(lat_rad) * np.cos(delta) * np.sin(omega_s)
-    )
-    Ra = Ra_MJ / 2.45   # convert MJ/m²/day → mm/day equivalent
-    pet = 0.0023 * Ra * np.sqrt(np.maximum(tmax - tmin, 0.0)) * (tmean + 17.8)
-    return np.maximum(pet, 0.0)
-
-
-def build_dataset(csv_path: Path = CSV_PATH) -> pd.DataFrame:
-    """
-    Return a daily DataFrame with columns:
-    prcp (mm/day), tmax (°C), tmin (°C), tmean (°C), pet (mm/day)
-    Index: DatetimeIndex 1990-01-01 to 2020-12-31.
-    No observed discharge — ungauged basin.
-    """
-    df = load_nasa_power_csv(csv_path)
-    df["tmean"] = (df["tmax"] + df["tmin"]) / 2.0
-
-    # Compute PET using Hargreaves method
-    doy = df.index.dayofyear.to_numpy().astype(float)
-    df["pet"] = hargreaves_pet(
-        df["tmax"].to_numpy(),
-        df["tmin"].to_numpy(),
-        df["tmean"].to_numpy(),
-        doy,
-        BASIN_LATITUDE_DEG,
-    )
-
-    # Keep 1990-2020
-    df = df.loc["1990-01-01":"2020-12-31"]
-
-    # Fill any missing values
-    df["prcp"] = df["prcp"].fillna(0.0)
-    df["pet"] = df["pet"].ffill().fillna(0.0)
-    df["tmax"] = df["tmax"].ffill().fillna(float(df["tmax"].mean()))
-    df["tmin"] = df["tmin"].ffill().fillna(float(df["tmin"].mean()))
-    df["tmean"] = (df["tmax"] + df["tmin"]) / 2.0
-
-    return df
+    df = load_discharge(zip_path)
+    df = df.loc["1980-01-01":"2014-12-31"].copy()
+    # Guarantee a continuous daily index
+    full_idx = pd.date_range(df.index[0], df.index[-1], freq="D")
+    df = df.reindex(full_idx)
+    df["flow"] = df["flow"].interpolate(method="time", limit_direction="both")
+    df.index.name = "date"
+    df["log_flow"] = log_transform(df["flow"].to_numpy())
+    return df[["flow", "log_flow"]]
 
 
 def split_dataset(df: pd.DataFrame):
-    """Split into historical (1990-2003) and recent (2004-2020) periods."""
-    hist   = df.loc[:"2003-12-31"].copy()
-    recent = df.loc["2004-01-01":].copy()
-    return hist, recent
+    """Split into training (1980-2003) and validation (2004-2014) periods."""
+    train = df.loc[:TRAIN_END].copy()
+    valid = df.loc[VALID_START:].copy()
+    return train, valid
 
 
 if __name__ == "__main__":
     df = build_dataset()
-    hist, recent = split_dataset(df)
-    print(f"Full dataset : {df.index[0].date()} to {df.index[-1].date()}  ({len(df)} days)")
-    print(f"Historical   : {hist.index[0].date()} to {hist.index[-1].date()}  ({len(hist)} days)")
-    print(f"Recent       : {recent.index[0].date()} to {recent.index[-1].date()}  ({len(recent)} days)")
-    print("\nData statistics:")
-    print(df[["prcp", "tmax", "tmin", "pet"]].describe().round(3))
-
-    out = DATA_DIR / "processed_dataset.csv"
-    df.to_csv(out)
-    print(f"\nSaved to {out}")
+    train, valid = split_dataset(df)
+    print(f"Basin        : {BASIN_NAME} (USGS {GAUGE_ID})")
+    print(f"Full record  : {df.index[0].date()} to {df.index[-1].date()}  ({len(df)} days)")
+    print(f"Training     : {train.index[0].date()} to {train.index[-1].date()}  ({len(train)} days)")
+    print(f"Validation   : {valid.index[0].date()} to {valid.index[-1].date()}  ({len(valid)} days)")
+    print("\nDischarge statistics (m3/s):")
+    print(df["flow"].describe().round(3))
+    print(f"\nSaved cached discharge to {CACHED_CSV}")

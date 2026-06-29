@@ -1,102 +1,90 @@
 """
-calibrate.py — Calibrate the two-bucket model using differential evolution.
+calibrate.py — Model identification and order selection (Box-Jenkins).
 
-Objective: minimise negative NSE on the calibration period (1980-2003).
-Uses scipy.optimize.differential_evolution with a warm-up period (first 365 days
-excluded from NSE calculation) to allow model states to equilibrate.
+Replaces parameter calibration of a rainfall-runoff model with the statistical
+identification of an ARIMA(p, d, q) process for log-discharge:
+
+  1. Stationarity testing (ADF + KPSS) on the training series to choose the
+     differencing order d.
+  2. A grid search over (p, d, q) minimising the Akaike Information Criterion
+     (AIC), with the Bayesian Information Criterion (BIC) reported alongside.
+
+This is the "calibration" step of the statistical framework: the data, not a
+hydrologist, choose the model order.
 """
 
 import numpy as np
-from scipy.optimize import differential_evolution
 
-from .model import run_model, PARAM_BOUNDS, params_from_list, warm_up
-from .metrics import nse
-
-WARMUP_DAYS = 365
+from .model import ARIMA, adf_test, kpss_test, difference
 
 
-def kge(q_obs: np.ndarray, q_sim: np.ndarray) -> float:
-    """Kling-Gupta Efficiency (Gupta et al., 2009)."""
-    if q_obs.std() == 0 or q_sim.std() == 0 or q_obs.mean() == 0:
-        return -999.0
-    r = np.corrcoef(q_obs, q_sim)[0, 1]
-    alpha = q_sim.std() / q_obs.std()
-    beta  = q_sim.mean() / q_obs.mean()
-    return float(1.0 - np.sqrt((r - 1)**2 + (alpha - 1)**2 + (beta - 1)**2))
-
-
-_EPS = 1e-6   # small constant for log transform
-
-
-def log_nse(q_obs: np.ndarray, q_sim: np.ndarray) -> float:
-    """NSE on log-transformed flows — more weight on low flows, more robust."""
-    lo = np.log(q_obs + _EPS)
-    ls = np.log(q_sim + _EPS)
-    num = np.sum((lo - ls) ** 2)
-    den = np.sum((lo - lo.mean()) ** 2)
-    if den == 0:
-        return np.nan
-    return float(1.0 - num / den)
-
-
-_EPS = 1e-6
-
-
-def log_nse(q_obs: np.ndarray, q_sim: np.ndarray) -> float:
-    """NSE on log-flows — more weight on low flows, more robust to extremes."""
-    lo = np.log(np.maximum(q_obs, _EPS))
-    ls = np.log(np.maximum(q_sim, _EPS))
-    num = np.sum((lo - ls) ** 2)
-    den = np.sum((lo - lo.mean()) ** 2)
-    if den == 0:
-        return np.nan
-    return float(1.0 - num / den)
-
-
-def objective(x: list, prcp: np.ndarray, pet: np.ndarray, q_obs: np.ndarray) -> float:
-    """Combined objective: 0.7 × NSE + 0.3 × log-NSE.
-    Balances peak-flow performance with volumetric robustness for better validation."""
-    params = params_from_list(x)
-    q_sim = run_model(prcp, pet, params)
-    obs_w = q_obs[WARMUP_DAYS:]
-    sim_w = q_sim[WARMUP_DAYS:]
-    n1 = nse(obs_w, sim_w)
-    n2 = log_nse(obs_w, sim_w)
-    if np.isnan(n1) or np.isnan(n2):
-        return 1.0
-    return -(0.7 * n1 + 0.3 * n2)
-
-
-def calibrate(prcp: np.ndarray, pet: np.ndarray, q_obs: np.ndarray,
-              seed: int = 42, maxiter: int = 2000, popsize: int = 15,
-              tol: float = 1e-7) -> tuple:
+def choose_differencing(y, max_d: int = 2) -> dict:
     """
-    Run differential evolution calibration.
+    Decide the differencing order d using ADF and KPSS jointly.
+    d increases until ADF rejects a unit root AND KPSS fails to reject
+    stationarity (or max_d is reached).
+    """
+    report = []
+    d = 0
+    series = np.asarray(y, dtype=float)
+    chosen = 0
+    while d <= max_d:
+        s = difference(series, d)
+        adf = adf_test(s)
+        kpss = kpss_test(s)
+        report.append({"d": d, "adf": adf, "kpss": kpss})
+        if adf["stationary_5pct"] and kpss["stationary_5pct"]:
+            chosen = d
+            break
+        chosen = d
+        d += 1
+    return {"d": chosen, "report": report}
+
+
+def select_order(y, p_range=range(0, 5), d_values=(None,), q_range=range(0, 3),
+                 max_d: int = 2):
+    """
+    Grid-search ARIMA orders by AIC.
+
+    If d_values is (None,), the differencing order is chosen automatically by
+    :func:`choose_differencing`; otherwise the supplied d values are searched.
 
     Returns
     -------
-    best_params : dict of calibrated parameters
-    cal_nse     : calibration NSE (excluding warm-up)
-    result      : full scipy OptimizeResult
+    best_order : tuple (p, d, q)
+    best_model : fitted ARIMA
+    table      : list of dicts {order, aic, bic} sorted by AIC
+    diff_info  : output of choose_differencing (or None)
     """
-    print("Pre-compiling Numba JIT model...")
-    warm_up()
-    print("Starting calibration (differential_evolution)...")
-    result = differential_evolution(
-        objective,
-        bounds=PARAM_BOUNDS,
-        args=(prcp, pet, q_obs),
-        seed=seed,
-        maxiter=maxiter,
-        popsize=popsize,
-        tol=tol,
-        mutation=(0.5, 1.5),
-        recombination=0.7,
-        polish=True,
-        disp=True,
-    )
-    best_params = params_from_list(result.x)
-    # Compute NSE (the reported metric) with best params
-    q_sim_cal = run_model(prcp, pet, best_params)
-    cal_nse = nse(q_obs[WARMUP_DAYS:], q_sim_cal[WARMUP_DAYS:])
-    return best_params, cal_nse, result
+    y = np.asarray(y, dtype=float)
+    diff_info = None
+    if d_values == (None,):
+        diff_info = choose_differencing(y, max_d=max_d)
+        d_values = (diff_info["d"],)
+
+    # Condition every candidate on a common number of initial observations so
+    # the information criteria are computed on an identical sample (otherwise
+    # CSS drops max(p, q) points and models are ranked on different n).
+    cond = max(max(p, q) for p in p_range for q in q_range)
+
+    table = []
+    best = None
+    for d in d_values:
+        for p in p_range:
+            for q in q_range:
+                if p == 0 and q == 0:
+                    continue
+                try:
+                    model = ARIMA((p, d, q)).fit(y, cond=cond)
+                    if not np.isfinite(model.aic_c):
+                        continue
+                    table.append({"order": (p, d, q), "aic": model.aic_c,
+                                  "bic": model.bic_c})
+                    if best is None or model.aic_c < best[1]:
+                        best = ((p, d, q), model.aic_c, model)
+                except Exception:
+                    continue
+
+    table.sort(key=lambda r: r["aic"])
+    best_order, _, best_model = best
+    return best_order, best_model, table, diff_info
