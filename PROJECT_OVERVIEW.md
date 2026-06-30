@@ -30,7 +30,7 @@ discharge record and projects it forward.
 The model is built the proper Box–Jenkins way:
 1. **Stationarity tests** (ADF + KPSS) decide how much to *difference* the series → `d`.
 2. **ACF / PACF** plots suggest the autoregressive (`p`) and moving-average (`q`) orders.
-3. The order is picked objectively by **AIC**; the winner here is **ARIMA(3,1,2)**.
+3. **All combinations** over a grid of p and q values (more than a dozen candidate models) are fitted and ranked by **AIC** (Akaike Information Criterion) — the score that rewards accuracy while penalising complexity. The winner is **ARIMA(3,1,2)**.
 4. A **Ljung–Box test** confirms the residuals are white noise (model is adequate).
 
 The model is fitted to the **natural log** of discharge to stabilise the variance.
