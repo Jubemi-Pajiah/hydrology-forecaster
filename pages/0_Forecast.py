@@ -51,6 +51,56 @@ def fit_model(order_tuple):
     return model
 
 
+def explain_forecast(q_fcst, last_flow, last_date, q_mean, results, horizon):
+    """Rule-based plain-English explanation of a forecast (no external model)."""
+    end = float(q_fcst[-1])
+    chg = (end - last_flow) / last_flow * 100.0 if last_flow else 0.0
+    if abs(chg) < 4:
+        trend = f"stay close to its latest level, around {end:.1f} m³/s"
+    elif chg > 0:
+        trend = f"rise gradually to about {end:.1f} m³/s (up ~{abs(chg):.0f}%)"
+    else:
+        trend = f"ease down to about {end:.1f} m³/s (down ~{abs(chg):.0f}%)"
+
+    ratio = end / q_mean if q_mean else 1.0
+    if ratio < 0.5:
+        level, regime = "well below the long-term average — a low-flow (dry) spell", "low"
+    elif ratio < 0.85:
+        level, regime = "below the long-term average", "low"
+    elif ratio <= 1.15:
+        level, regime = "close to the long-term average", "normal"
+    elif ratio <= 2.0:
+        level, regime = "above the long-term average", "high"
+    else:
+        level, regime = "well above average — a high-flow spell", "high"
+
+    if regime == "low":
+        drift = ("Because the river is currently running low, the model expects it "
+                 "to recover slowly toward normal levels.")
+    elif regime == "high":
+        drift = ("Because the river is currently running high, the model expects it "
+                 "to recede slowly toward normal levels.")
+    else:
+        drift = ("Because the river is near its usual level, the model expects only "
+                 "small day-to-day changes.")
+
+    nse1 = results.get("forecast", {}).get("1", {}).get("model", {}).get("NSE", 0.82)
+    days = f"{horizon} day" + ("s" if horizon > 1 else "")
+    return [
+        f"**What the model did:** starting from the most recent measurement on "
+        f"{last_date:%d %b %Y} ({last_flow:.1f} m³/s), it projected the flow "
+        f"{days} ahead using only the river's own recent history — no rainfall "
+        f"or weather data.",
+        f"**What it expects:** over this period the flow should {trend}. That is "
+        f"{level} (the long-term average is {q_mean:.0f} m³/s).",
+        f"**Why the days look similar:** river flow changes slowly, so the forecasts "
+        f"move only gently. {drift}",
+        f"**How much to trust it:** the first day is the most reliable (validated as "
+        f"'very good', NSE {nse1:.2f}); accuracy falls with each extra day, so treat "
+        f"anything beyond about three days as a rough guide only.",
+    ]
+
+
 # ── Styling ───────────────────────────────────────────────────────────────────
 st.markdown(
     f"""
@@ -122,8 +172,11 @@ with st.sidebar:
 
 # ── Run ─────────────────────────────────────────────────────────────────────
 if run_btn:
+    # Forecast on the log scale, then back-transform with the same log-normal
+    # bias correction used in the thesis (exp(mu + sigma_k^2 / 2)), so the app
+    # and the reported results are consistent and the values are unbiased.
     log_fcst = model.forecast(horizon)
-    q_fcst = inv_log_transform(log_fcst)
+    q_fcst = inv_log_transform(log_fcst + 0.5 * model.kstep_logvar(horizon))
     fcst_dates = [last_date + timedelta(days=i + 1) for i in range(horizon)]
 
     st.markdown('<span class="section-label">Forecast Summary</span>', unsafe_allow_html=True)
@@ -134,6 +187,18 @@ if run_btn:
             st.metric(label=f"Day {i+1}  {fcst_dates[i].strftime('%d %b')}",
                       value=f"{q_fcst[i]:.2f} m³/s",
                       delta=f"{delta:+.0f}% vs mean")
+
+    # Plain-language explanation
+    st.markdown("## What this forecast means")
+    for line in explain_forecast(q_fcst, float(flow.iloc[-1]), last_date,
+                                 q_mean, results, horizon):
+        st.markdown(f"- {line}")
+    st.caption(
+        f"Note: this is a demonstration built on the historical record, which ends "
+        f"on {last_date:%d %b %Y}. The forecast therefore begins the day after that "
+        f"date (not today's date), showing how the method would project the river "
+        f"forward from the most recent available measurement."
+    )
 
     # Forecast table
     st.markdown("## Forecast Table")
