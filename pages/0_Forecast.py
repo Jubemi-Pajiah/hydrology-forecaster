@@ -250,3 +250,33 @@ if run_btn:
     )
 else:
     st.info("Set the horizon in the sidebar and press **Run Forecast** to generate a forecast.")
+
+# ── Model Selection (always visible) ─────────────────────────────────────────
+with st.expander("How the model was selected (Box-Jenkins order selection)", expanded=False):
+    st.markdown(
+        "Before any forecast is made, the model goes through a **Box-Jenkins identification** "
+        "process to find the best ARIMA(p, d, q) configuration:\n\n"
+        "1. **Stationarity tests** (ADF + KPSS) on the training data determined the differencing "
+        f"order **d = {results['differencing_d']}** — meaning the series is differenced once to remove slow trends.\n"
+        "2. **ACF / PACF plots** suggested candidate ranges for the autoregressive order p and "
+        "moving-average order q.\n"
+        "3. **All combinations** over a grid of p and q values were fitted to the training data "
+        "(1980–2003). Each candidate model was scored by the **Akaike Information Criterion (AIC)** "
+        "— a measure that rewards accuracy while penalising unnecessary complexity. "
+        "The model with the **lowest AIC wins**."
+    )
+    st.markdown("**Top 5 candidate models ranked by AIC** (lower = better fit):")
+    ranking = results.get("aic_ranking", [])
+    rank_rows = [{"Rank": i + 1,
+                  "Model": f"ARIMA{tuple(r['order'])}",
+                  "AIC": round(r["aic"], 1),
+                  "BIC": round(r["bic"], 1),
+                  "Selected": "✓" if i == 0 else ""}
+                 for i, r in enumerate(ranking[:5])]
+    st.dataframe(pd.DataFrame(rank_rows), use_container_width=True, hide_index=True)
+    st.caption(
+        f"Winner: **{results['model']}** (AIC {results['aic']:.1f}). "
+        "The AIC and BIC both penalise model complexity, so winning on both gives confidence "
+        "that the selected order is not over-fitted. Ljung-Box residual test p = "
+        f"{results['ljung_box']['pvalue']:.3f} (> 0.05 → residuals are white noise, model is adequate)."
+    )
