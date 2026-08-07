@@ -20,8 +20,12 @@ finals_project/
 ├── CLAUDE.md                  ← this file
 ├── PROJECT_OVERVIEW.md        ← plain-English repo overview (source for the PDF)
 ├── documents/                 ← FINISHED DELIVERABLES to send to the supervisor
-│   ├── Chapter3_4_5_Hydrological_Forecasting.docx   (thesis; figures embedded)
+│   ├── Computer_Hydrological_Forecasting_Full_Report.docx  ← THE deliverable
+│   │      (front matter + Ch 1-5 + References + code Appendix, on the Civil template)
+│   ├── Chapter3_4_5_Hydrological_Forecasting.docx   (superseded: Ch 3-5 only)
 │   ├── Project_Overview.pdf                          (overview)
+│   ├── PROJECT TEMPLATE_Civil.docx                   (departmental template)
+│   ├── 190402003_ benedict ugbodaga (2).docx         (author's Ch 1-3 draft)
 │   └── README.md                                     (what to send + WPS export steps)
 ├── archive/                   ← superseded rainfall-runoff material (not used)
 │   ├── PROJECT_CONTEXT.md, POWER_…csv, logs/, README.md
@@ -33,7 +37,11 @@ finals_project/
 │   ├── metrics.py      NSE, RMSE, PBIAS, MAE, R², persistence skill score
 │   └── plots.py        the six figures
 ├── run_pipeline.py            ← runs everything end-to-end (writes data/results.json + figures/)
-├── write_document.py          ← builds the thesis .docx into documents/
+├── write_full_report.py       ← builds the FULL Ch 1-5 report (+ references, + code appendix)
+│   ├── report_lib.py             template styling, figures/tables, code-block rendering
+│   ├── report_front_ch12.py      front matter, Chapter One, Chapter Two
+│   └── report_ch345.py           Chapters Three, Four, Five
+├── write_document.py          ← builds the older Ch 3-5-only .docx into documents/
 ├── make_overview_pdf.py       ← builds the overview PDF into documents/
 ├── app.py + pages/            ← Streamlit web app (Forecast Tool + Documentation)
 ├── render.yaml                ← Render.com deploy config (needs app.py at repo root)
@@ -48,12 +56,31 @@ finals_project/
 ## How to run
 ```bash
 python run_pipeline.py        # model + forecasts + figures + data/results.json (~80 s)
-python write_document.py      # rebuild documents/Chapter3_4_5_Hydrological_Forecasting.docx
+python write_full_report.py   # rebuild documents/Computer_Hydrological_Forecasting_Full_Report.docx
+python write_document.py      # rebuild the older Ch 3-5-only .docx
 python make_overview_pdf.py   # rebuild documents/Project_Overview.pdf
 streamlit run app.py          # launch the web app
 ```
 Regeneration order matters: `run_pipeline.py` first (it refreshes `results.json` and the
-figures), then the two document generators, which read `results.json`.
+figures), then the document generators, which read `results.json`.
+
+## The full report (documents/…Full_Report.docx)
+- Formatted to `documents/PROJECT TEMPLATE_Civil.docx`: A4, 2 cm margins, Times New
+  Roman 12 pt double-spaced, **two heading levels only** (the template forbids a third,
+  so Chapter 3's old 3.2.1/3.4.2-style headings are flattened into 3.2–3.5), table titles
+  above tables, figure captions below figures, sequential Figure 1–6 / Table 1–4, APA 6
+  references with hanging indents, equations numbered (1)–(12) flush right.
+- **Chapters 1–2 were rewritten.** The author's Ch 1–3 draft still described the
+  superseded lumped rainfall–runoff model; leaving it would have contradicted Ch 4–5.
+  The structure, argument and voice are preserved but the model family is now the ARIMA
+  one actually built. Do not reintroduce the rainfall–runoff text.
+- The Table of Contents, List of Figures and List of Tables are **Word fields**, and the
+  figure/table lists key off the custom `FigureCaption` / `TableCaption` styles. They are
+  empty until refreshed — Ctrl+A then F9 in WPS Writer before exporting to PDF.
+- The Appendix (A–G) is extracted from `src/*.py` **at build time via `ast`**, so the
+  listings cannot drift from the code that produced the results. Renaming a function
+  listed in `write_full_report.appendix_listings()` will fail the build loudly, which is
+  intended.
 
 ## Working rules (important)
 - **No new installs.** Do not `pip install` packages or system software without explicit
@@ -74,6 +101,19 @@ ARIMA(3,1,2): 1-day NSE 0.824 / PSS +0.224 / PBIAS +1.0%; 2-day 0.541 / +0.244;
 3-day 0.347 / +0.267. Residuals: no short-lag autocorrelation (Ljung–Box p≈0.23) but
 volatility clustering + heavy tails (expected for streamflow). MA root ≈1.09 (mild
 over-differencing, acknowledged in the thesis).
+
+## The Streamlit app (app.py + pages/)
+- The app **must not re-estimate the model**. `fit_model()` loads the coefficients from
+  `data/results.json` via `ARIMA.from_params(...)`. Calling `.fit()` here was wrong twice
+  over: it took ~133 s (a two-minute blank page on Render's free tier), and it fitted on
+  the FULL 1980-2014 record, so the app's coefficients silently differed from the
+  training-period ones reported in Chapter 4 while the sidebar showed the thesis AIC.
+- The forecast **origin is user-selectable** (`ARIMA.forecast_from(y_hist, k)`), not pinned
+  to the end of the record. With a fixed origin the app returned identical values forever
+  and looked broken. Choosing an earlier origin scores the forecast against the discharge
+  that actually followed — the single-origin form of the thesis's rolling-origin evaluation.
+- The record ends 2014-12-31, so forecast dates are historical. Say so prominently in the
+  UI; a grey caption at the bottom of the page is not enough — testers missed it.
 
 ## Deployment note
 The Streamlit app needs `data/conecuh_discharge.csv` (the cached discharge) at runtime;

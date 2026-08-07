@@ -254,6 +254,36 @@ class ARIMA:
         theta = x[1 + p:1 + p + q]
         return c, phi, theta
 
+    @classmethod
+    def from_params(cls, order, c, phi, theta, y):
+        """
+        Build a model from coefficients that were estimated earlier, instead of
+        re-estimating them.
+
+        The expensive part of :meth:`fit` is the optimiser, which evaluates the
+        conditional sum of squares many times over. Given the coefficients
+        already reported in data/results.json, a single pass is enough to
+        recover the residuals and the error variance, which is all the
+        forecasting and bias-correction methods need. Used by the web app so it
+        starts in seconds rather than re-fitting on every cold start, and it
+        forecasts from exactly the coefficients reported in the thesis.
+        """
+        self = cls(tuple(order))
+        self.c = float(c)
+        self.phi = np.asarray(phi, dtype=float)
+        self.theta = np.asarray(theta, dtype=float)
+
+        y = np.asarray(y, dtype=float)
+        self._y_train = y
+        w = difference(y, self.d)
+        self._w_train = w
+        m = max(self.p, self.q)
+        resid = self._css_resid(w, self.c, self.phi, self.theta)[m:]
+        self.resid_ = resid
+        self.nobs = len(w) - m
+        self.sigma2 = float(np.dot(resid, resid)) / self.nobs
+        return self
+
     def fit(self, y, cond=None):
         """Fit the model to series y (here: log-discharge of the training set).
 
@@ -389,10 +419,22 @@ class ARIMA:
 
     def forecast(self, k):
         """k-step forecast (level scale) from the end of the training series."""
-        w = difference(self._y_train, self.d)
+        return self.forecast_from(self._y_train, k)
+
+    def forecast_from(self, y_hist, k):
+        """
+        k-step forecast (level scale) from the end of an arbitrary history.
+
+        Same recursion as :meth:`forecast`, but the origin is wherever y_hist
+        ends rather than the end of the training series, so a forecast can be
+        issued from any point in the record using only the data up to that
+        point. This is the single-origin form of :meth:`rolling_kstep`.
+        """
+        y_hist = np.asarray(y_hist, dtype=float)
+        w = difference(y_hist, self.d)
         e = self._css_resid(w, self.c, self.phi, self.theta)
         w_fcst = self._forecast_diff(w, e, k)
-        return integrate_forecasts(self._y_train, w_fcst, self.d)
+        return integrate_forecasts(y_hist, w_fcst, self.d)
 
     def rolling_kstep(self, y_full, k, start_idx):
         """
