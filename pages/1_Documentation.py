@@ -241,8 +241,8 @@ st.markdown(
     """
 This is a stricter, more honest test than it might look: a wide synthetic envelope that
 contains everything is not informative, so the envelope width itself (visible in the
-Forecast Tool) is part of what should be judged, not just whether the historical value
-happens to fall inside it.
+River Outlook charts) is part of what should be judged, not just whether the historical
+value happens to fall inside it.
 """
 )
 

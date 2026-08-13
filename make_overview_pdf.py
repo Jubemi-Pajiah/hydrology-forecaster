@@ -528,33 +528,44 @@ def build():
 
     pdf.h2("4.0  The easy version")
     pdf.body(
-        "Open the app, pick a variable (discharge, rainfall or stage), pick a "
-        "starting month and how many months ahead to look, and press Run "
-        "Forecast. You'll see a band of plausible futures, not one line -- and "
-        "that band will look slightly different every time you press the button, "
+        "Open the app -- it's called \"River Outlook\" in the top navigation. Pick "
+        "a starting month and how far ahead to look, and press \"Get the "
+        "Outlook\". One click forecasts all three variables together -- you don't "
+        "pick one first. You'll see bands of plausible futures, not single lines "
+        "-- and they'll look slightly different every time you press the button, "
         "because the model is honestly stochastic. Here is all you do:")
     pdf.bullet("Open the app - a page opens in your web browser.", label="1.")
-    pdf.bullet("On the left, pick the variable and the forecast origin month.",
-               label="2.")
-    pdf.bullet("Choose the horizon (months ahead) and how many synthetic "
-               "replicates to generate.", label="3.")
-    pdf.bullet("Press the \"Run Forecast\" button.", label="4.")
-    pdf.bullet("Read the answer: a band of plausible outcomes as cards, a table, "
-               "a chart, and the property-based validation results.", label="5.")
+    pdf.bullet("In the centre panel, choose the starting point and how far ahead "
+               "to look.", label="2.")
+    pdf.bullet("Press the \"Get the Outlook\" button.", label="3.")
+    pdf.bullet("Read the answer: a compact outlook card for each of the three "
+               "variables on the right, and a chart with the plain-language story "
+               "behind each one in the centre.", label="4.")
 
     pdf.h2("4.1  The web app, step by step (the main way to use it)")
     pdf.body(
-        "Open the app and you get a browser page with two pages in the left "
-        "sidebar: \"Forecast Tool\" and \"Documentation\". On the Forecast Tool "
-        "page:")
-    pdf.bullet("Choose the Variable (discharge, rainfall or stage).", label="1.")
-    pdf.bullet("Choose the Forecast origin (month) and Horizon (months ahead).",
-               label="2.")
-    pdf.bullet("Click \"Run Forecast\".", label="3.")
-    pdf.bullet("Read the results: per-month summary cards showing the median and "
-               "90% band, a forecast table, a chart of recent history plus the "
-               "synthetic band, and the property-based validation table showing "
-               "how many statistics the model reproduces.", label="4.")
+        "Open the app and you get a browser page with two tabs along the top: "
+        "\"River Outlook\" and \"How This Works\". The River Outlook page is laid "
+        "out in three panels -- a left panel with context and quick facts, a "
+        "centre panel with the controls, charts and plain-language story, and a "
+        "right panel with a compact outlook card per variable. On the River "
+        "Outlook page:")
+    pdf.bullet("Pick the Forecast origin (month) -- either \"End of record\" or a "
+               "date you choose.", label="1.")
+    pdf.bullet("Pick the Horizon: 3 months, 6 months, 1 year, 2 years, or 5 "
+               "years.", label="2.")
+    pdf.bullet("Click \"Get the Outlook\" -- this runs all three variables "
+               "(discharge, rainfall, stage) at once, not one at a time.",
+               label="3.")
+    pdf.bullet("Read the results: a compact card per variable on the right (trend, "
+               "level, track record), and in the centre a tab per variable with a "
+               "chart (history, uncertainty band, expected path, and what actually "
+               "happened where it's known) plus a fill-in-the-blanks explanation "
+               "sentence underneath it.", label="4.")
+    pdf.bullet("Open \"For the curious\" at the bottom of the centre panel for the "
+               "actual numbers behind each model: the AR/MA coefficients with "
+               "their standard errors, the stationarity test evidence, and the "
+               "full property-based validation table.", label="5.")
 
     pdf.h2("4.2  The full run (get every chart and number at once)")
     pdf.body(

@@ -1,7 +1,8 @@
 # Project Overview — Computer Hydrological Forecasting
 
-A plain-English rundown of what this project is and how it fits together, as of the
-2026-08-12 pivot to a monthly, three-variable, stochastically-validated framework.
+A plain-English rundown of what this project is and how it fits together, as of
+2026-08-13 — after the pivot to a monthly, three-variable, stochastically-validated
+framework, and the app/overview rewrite that followed it.
 
 ---
 
@@ -202,7 +203,7 @@ would look clean.
 | `src/validation.py` | **New** — property-based validation: compares an ensemble's statistical properties to the historical record |
 | `src/plots.py` | The 6 figures, rewritten for 3 variables x monthly x stochastic |
 | `run_pipeline.py` | The **"run everything" button** — loads all 3 variables, fits all 3 models, runs stochastic validation, saves `data/results.json` + all figures |
-| `app.py` + `pages/` | Streamlit web app — pick a variable, get a stochastic forecast ensemble, see property-based validation live |
+| `app.py` + `pages/` | "River Outlook" — a 3-pane Streamlit dashboard (context left, controls/charts/story centre, compact per-variable cards right). One button forecasts all 3 variables at once; "For the curious" surfaces the AR/MA coefficients, standard errors, and stationarity evidence live |
 | `figures/` | 6 charts: monthly series (3-panel), ACF/PACF (3x2), ensemble vs. observed (3-panel), property validation (3-panel), residual diagnostics (3x2), parameter estimates with confidence intervals (3-panel) |
 | `documents/Computer_Hydrological_Forecasting_Full_Report.docx` | The full Chapter 1–5 thesis, rewritten for the new methodology |
 | `write_full_report.py` (+ `report_front_ch12.py`, `report_ch345.py`, `report_lib.py`) | Generates the full report from `data/results.json`; the code appendix is extracted live from `src/*.py` so it can't drift from the code that produced the results |
@@ -228,10 +229,13 @@ No external time-series modelling library (no `statsmodels`).
 - **Models:** all three variables fitted, diagnosed, and validated. Full diagnostics
   (Ljung-Box, ARCH, Jarque-Bera, characteristic roots) computed and reported honestly,
   including where they don't pass.
-- **App:** rewritten for per-variable stochastic forecasting, tested end-to-end in a
-  real browser (variable selection, ensemble forecast, property validation table, all
-  confirmed working), committed and pushed — the live Render deployment updates
-  automatically from this.
+- **App:** redesigned twice — first for per-variable stochastic forecasting, then
+  rebuilt again as "River Outlook," a one-click dashboard that forecasts all 3
+  variables together with a plain-language explanation per variable, a 3-pane layout
+  (not a narrow centred column), and a "For the curious" panel exposing the actual
+  AR/MA coefficients, their standard errors, and the stationarity test evidence — not
+  just the model order. Tested end-to-end in a real browser, committed and pushed —
+  the live Render deployment updates automatically from this.
 - **Report:** Chapters 1–5 rewritten — corrected basin identity throughout, added an
   explicit AR/MA/ARMA/ARIMA/ARIMAX comparison to the literature review, rewrote the
   methodology chapter around monthly/multi-variable/stochastic validation, rewrote the
