@@ -152,7 +152,7 @@ def write_chapter3(doc, R, figures_dir, eq):
          "days had data; months falling short of that threshold were treated "
          "as missing and filled by time-based linear interpolation across "
          "neighbouring months, a small correction given the completeness of "
-         "the record (Table 2). The resulting monthly series each run from "
+         "the record (Table 1). The resulting monthly series each run from "
          "January 1980 to December 2014, 420 months, and were split "
          "chronologically into a training (calibration) period, 1980-2003 "
          "(288 months, roughly 70 per cent of the record), used to identify "
@@ -410,11 +410,11 @@ def write_chapter4(doc, R, figures_dir, eq):
          f"{V(R,'rainfall')['n_interpolated_months']} month(s), and stage in "
          f"{V(R,'stage')['n_interpolated_months']} month(s), out of 420. "
          "Summary statistics for the training period, on which every model "
-         "is identified and estimated, are given in Table 2. All three "
+         "is identified and estimated, are given in Table 1. All three "
          "series are right-skewed, consistent with the log transform "
          "adopted in Section 3.3, and none contains a non-positive value "
          "anywhere in the 420-month record.")
-    table_title(doc, "Table 2: Summary statistics of the three monthly "
+    table_title(doc, "Table 1: Summary statistics of the three monthly "
                      "series, training period (1980-2003).")
     table(doc, ["Variable", "Unit", "Mean", "Std. dev.", "Skewness", "Peak"],
           [[v.capitalize(), VAR_UNIT[v],
@@ -426,12 +426,12 @@ def write_chapter4(doc, R, figures_dir, eq):
     h1(doc, "4.2 Stationarity and Order of Differencing")
     body(doc,
          "The stationarity tests of Section 3.5, applied independently to "
-         "each variable's training series, are summarised in Table 3. For "
+         "each variable's training series, are summarised in Table 2. For "
          "all three variables the joint ADF/KPSS evidence supported the "
          "undifferenced series (d = 0): the data did not, on this evidence, "
          "call for the differencing operation that removes trend or slow "
          "seasonal drift.")
-    table_title(doc, "Table 3: Stationarity test results and selected "
+    table_title(doc, "Table 2: Stationarity test results and selected "
                      "differencing order, by variable.")
     for v in VARS:
         rep = V(R, v)["stationarity_report"][-1]
@@ -464,15 +464,15 @@ def write_chapter4(doc, R, figures_dir, eq):
          "functions of Figure 2, a systematic grid search was carried out, "
          "independently for each variable, over all ARIMA(p, d, q) models "
          "with p in {0, 1, 2, 3, 4} and q in {0, 1, 2}, excluding the "
-         "trivial case p = q = 0, with d fixed as in Table 3. The selected "
+         "trivial case p = q = 0, with d fixed as in Table 2. The selected "
          "models, each the lowest-AIC candidate from its own search, are "
-         "summarised in Table 4, with the top five candidates for each "
-         "variable given in Table 5.")
-    table_title(doc, "Table 4: Selected ARIMA model, by variable.")
+         "summarised in Table 3, with the top five candidates for each "
+         "variable given in Table 4.")
+    table_title(doc, "Table 3: Selected ARIMA model, by variable.")
     table(doc, ["Variable", "Model", "AIC", "BIC"],
           [[v.capitalize(), order_str(V(R, v)["order"]),
             f"{V(R,v)['aic']:.1f}", f"{V(R,v)['bic']:.1f}"] for v in VARS])
-    table_title(doc, "Table 5: Top five candidate models by variable, "
+    table_title(doc, "Table 4: Top five candidate models by variable, "
                      "ranked by the Akaike Information Criterion.")
     for v in VARS:
         body(doc, f"{v.capitalize()}:", bold=True)
@@ -485,13 +485,13 @@ def write_chapter4(doc, R, figures_dir, eq):
     h1(doc, "4.4 Parameter Estimates and Standard Errors")
     body(doc,
          "The estimated coefficients of each selected model, with their "
-         "standard errors from Section 3.5, are given in Table 6. This is "
+         "standard errors from Section 3.5, are given in Table 5. This is "
          "the answer to the question order selection alone does not "
          "provide: not only what structure was chosen, but what the fitted "
          "relationship actually is, and how precisely each part of it is "
          "known. Figure 5 shows the same information graphically, as 95 per "
          "cent confidence intervals for every coefficient of every model.")
-    table_title(doc, "Table 6: Estimated AR/MA coefficients and standard "
+    table_title(doc, "Table 5: Estimated AR/MA coefficients and standard "
                      "errors, by variable.")
     for v in VARS:
         r = V(R, v)
@@ -526,13 +526,13 @@ def write_chapter4(doc, R, figures_dir, eq):
 
     h1(doc, "4.5 Residual Diagnostics")
     body(doc,
-         "Residual diagnostics for each model are summarised in Table 7 "
+         "Residual diagnostics for each model are summarised in Table 6 "
          "and shown in Figure 6. The Ljung–Box test examines whether linear "
          "autocorrelation remains in the residuals; the ARCH test, a "
          "Ljung–Box test applied to the squared residuals, examines "
          "conditional heteroscedasticity (volatility clustering); and the "
          "Jarque–Bera test examines normality.")
-    table_title(doc, "Table 7: Residual diagnostics, by variable.")
+    table_title(doc, "Table 6: Residual diagnostics, by variable.")
     table(doc, ["Variable", "Ljung-Box p", "ARCH p", "Jarque-Bera p", "Skew", "Kurtosis"],
           [[v.capitalize(), f"{V(R,v)['diagnostics']['ljung_box']['pvalue']:.4f}",
             f"{V(R,v)['diagnostics']['arch']['pvalue']:.4f}",
@@ -557,12 +557,19 @@ def write_chapter4(doc, R, figures_dir, eq):
          "stochastic ensembles from these same models still reproduce most "
          "of the historical record's summary statistics, and Section 5.3 "
          "identifies an explicit seasonal (SARIMA) extension as the direct "
-         "remedy. The Jarque–Bera test rejects normality for all three "
-         "variables, and the ARCH test indicates volatility clustering is "
-         "not significant for discharge and stage but is borderline for "
-         "rainfall; heavy tails and clustered volatility are the expected "
-         "signature of hydrological variables and were anticipated in "
-         "Section 2.5.")
+         "remedy. The Jarque–Bera test rejects normality for rainfall "
+         "(p &lt; 0.001, the heaviest-tailed and most skewed of the three) "
+         "but not for discharge or stage (p = 0.19 and 0.17 respectively, "
+         "both close to Gaussian kurtosis). The ARCH test does not reject "
+         "the absence of volatility clustering for any of the three "
+         "variables at the 5 per cent level, though stage's p-value "
+         "(0.34) sits closest to that threshold and rainfall's (0.68) is "
+         "comfortably clear of it. Rainfall's departure from normality is "
+         "the kind of heavy-tailed, skewed behaviour anticipated for "
+         "hydrological variables in Section 2.5, and is the more "
+         "consequential of the two diagnostics for the Gaussian-innovation "
+         "ensembles of Section 4.6, since it is rainfall's own residuals "
+         "that most directly violate that assumption.")
 
     h1(doc, "4.6 Stochastic Ensemble and Property-Based Validation")
     body(doc,
@@ -571,14 +578,14 @@ def write_chapter4(doc, R, figures_dir, eq):
          "spanning the validation period, 2004-2014, as described in "
          "Section 3.6. Figure 7 compares the 5th-to-95th-percentile band of "
          "each ensemble against the actual observed validation-period "
-         "record. Table 8 reports the property-based validation outcome: "
+         "record. Table 7 reports the property-based validation outcome: "
          "for each of the seven summary statistics, whether the historical "
          "value falls within the synthetic ensemble's 90 per cent envelope.")
     figure(doc, figures_dir / "Fig3_ForecastHydrograph.png",
            "Figure 7: Synthetic ensemble (5th-95th percentile band and "
            "median) against the observed record, validation period "
            "(2004-2014), by variable.")
-    table_title(doc, "Table 8: Property-based validation summary, by "
+    table_title(doc, "Table 7: Property-based validation summary, by "
                      "variable.")
     table(doc, ["Variable", "Properties within 90% envelope"],
           [[v.capitalize(), f"{V(R,v)['validation_n_within']} / "
@@ -720,11 +727,17 @@ def write_chapter5(doc, R, eq):
          "events, is partly non-linear. Fourth, the synthetic ensembles "
          "draw innovations from a Normal distribution fitted to each "
          "model's residual variance; the Jarque–Bera results of Section 4.5 "
-         "show heavier-than-normal tails for every variable, so extreme-"
-         "tail synthetic values are plausibly somewhat under-dispersed "
-         "relative to reality, a bootstrap-innovation alternative was "
-         "implemented (Appendix F) but not adopted as the primary method "
-         "for this report. Fifth, the analysis used a single basin; "
+         "show this is a reasonable approximation for discharge and stage "
+         "but not for rainfall, whose residuals are heavy-tailed and "
+         "skewed, so rainfall's extreme-tail synthetic values are "
+         "plausibly under-dispersed relative to reality despite its clean "
+         "property-validation pass. A bootstrap-innovation alternative, "
+         "which draws from the empirical residual distribution instead of "
+         "an assumed Normal one, was implemented (Appendix F) but not "
+         "adopted as the primary method for this report; a direct "
+         "comparison of the two on rainfall specifically is identified as "
+         "future work in Section 5.4. Fifth, the analysis used a single "
+         "basin; "
          "transferability of both the fitted parameters and the "
          "qualitative pattern of results (strong persistence for discharge "
          "and stage, weak persistence for rainfall) to a basin with a "
@@ -740,9 +753,11 @@ def write_chapter5(doc, R, eq):
          "is resolved as a result. Second, the bootstrap-innovation "
          "variant of the stochastic simulator, which resamples from the "
          "model's own residuals rather than assuming Normal innovations, "
-         "should be evaluated as the primary generator, to test whether it "
-         "better reproduces the heavy-tailed behaviour identified in the "
-         "Jarque–Bera diagnostics. Third, the framework should be applied "
+         "should be evaluated against the Gaussian version specifically "
+         "for rainfall, whose residuals are the only ones of the three "
+         "showing heavy-tailed, skewed behaviour in the Jarque–Bera "
+         "diagnostics, to test whether it better reproduces rainfall's "
+         "extreme-month properties. Third, the framework should be applied "
          "to additional basins, including basins in more markedly seasonal "
          "or data-scarce climates, to test the generality of both the "
          "methodology and the specific finding that discharge and stage "
