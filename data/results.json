@@ -1,184 +1,708 @@
 {
-  "basin": "Conecuh River, Alabama (USGS 02361000)",
-  "model": "ARIMA(3, 1, 2)",
-  "differencing_d": 1,
-  "aic": -24909.01,
-  "bic": -24859.47,
-  "phi": [
-    0.708801,
-    0.151453,
-    -0.131495
-  ],
-  "theta": [
-    -0.409097,
-    -0.462824
-  ],
-  "constant": -5e-06,
-  "aic_ranking": [
-    {
-      "order": [
-        3,
-        1,
-        2
+  "basin": "Conecuh River at Brantley, Alabama, USA (USGS 02371500)",
+  "gauge_id": "02371500",
+  "timestep": "monthly",
+  "variables": {
+    "discharge": {
+      "unit": "m3/s",
+      "n_months": 420,
+      "n_interpolated_months": 0,
+      "train_period": [
+        "1980-01-01",
+        "2003-12-01"
       ],
-      "aic": -24909.01,
-      "bic": -24859.47
-    },
-    {
-      "order": [
-        4,
-        1,
-        2
+      "valid_period": [
+        "2004-01-01",
+        "2014-12-01"
       ],
-      "aic": -24907.44,
-      "bic": -24850.82
-    },
-    {
-      "order": [
-        1,
-        1,
-        2
+      "differencing_d": 0,
+      "stationarity_report": [
+        {
+          "d": 0,
+          "adf_stat": -4.1755,
+          "adf_stationary": true,
+          "kpss_stat": 0.0854,
+          "kpss_stationary": true
+        }
       ],
-      "aic": -24838.3,
-      "bic": -24802.9
-    },
-    {
       "order": [
         4,
-        1,
+        0,
         1
       ],
-      "aic": -24819.82,
-      "bic": -24770.27
+      "aic": -139.34,
+      "bic": -113.79,
+      "phi": [
+        0.999,
+        -0.214154,
+        -0.027177,
+        -0.169099
+      ],
+      "theta": [
+        -0.274881
+      ],
+      "constant": 0.928386,
+      "standard_errors": {
+        "c": 0.183757,
+        "phi": [
+          0.174348,
+          0.155878,
+          0.084446,
+          0.065215
+        ],
+        "theta": [
+          0.176064
+        ]
+      },
+      "aic_ranking": [
+        {
+          "order": [
+            4,
+            0,
+            1
+          ],
+          "aic": -139.34,
+          "bic": -113.79
+        },
+        {
+          "order": [
+            4,
+            0,
+            2
+          ],
+          "aic": -137.45,
+          "bic": -108.26
+        },
+        {
+          "order": [
+            4,
+            0,
+            0
+          ],
+          "aic": -137.44,
+          "bic": -115.54
+        },
+        {
+          "order": [
+            3,
+            0,
+            2
+          ],
+          "aic": -134.55,
+          "bic": -109.01
+        },
+        {
+          "order": [
+            3,
+            0,
+            1
+          ],
+          "aic": -133.02,
+          "bic": -111.13
+        }
+      ],
+      "diagnostics": {
+        "ljung_box": {
+          "stat": 33.922,
+          "pvalue": 0.0035
+        },
+        "arch": {
+          "stat": 19.146,
+          "pvalue": 0.5123
+        },
+        "jarque_bera": {
+          "stat": 3.2734,
+          "pvalue": 0.1946,
+          "skew": 0.262,
+          "kurtosis": 3.046
+        },
+        "roots": {
+          "ar": [
+            1.164,
+            1.164,
+            2.09,
+            2.09
+          ],
+          "ma": [
+            3.638
+          ]
+        },
+        "smearing_factor": 1.3662
+      },
+      "historical_stats": {
+        "mean": 17.4418,
+        "std": 18.5585,
+        "skew": 1.9026,
+        "lag1_acf": 0.5276,
+        "peak": 109.734,
+        "max_dry_spell_months": 7,
+        "seasonal_amplitude": 40.1136,
+        "seasonal_means": {
+          "1": 24.6648,
+          "2": 32.6322,
+          "3": 44.7395,
+          "4": 25.1632,
+          "5": 12.0343,
+          "6": 11.8895,
+          "7": 13.678,
+          "8": 5.9104,
+          "9": 4.6259,
+          "10": 6.4951,
+          "11": 9.7434,
+          "12": 17.7254
+        }
+      },
+      "validation": {
+        "mean": {
+          "historical": 14.1993,
+          "ensemble_median": 17.473,
+          "ensemble_p5": 13.0504,
+          "ensemble_p95": 24.2696,
+          "within_90pct_envelope": true
+        },
+        "std": {
+          "historical": 16.6203,
+          "ensemble_median": 23.4379,
+          "ensemble_p5": 13.7389,
+          "ensemble_p95": 47.2637,
+          "within_90pct_envelope": true
+        },
+        "skew": {
+          "historical": 2.2808,
+          "ensemble_median": 3.1592,
+          "ensemble_p5": 1.9029,
+          "ensemble_p95": 6.5094,
+          "within_90pct_envelope": true
+        },
+        "lag1_acf": {
+          "historical": 0.5468,
+          "ensemble_median": 0.5398,
+          "ensemble_p5": 0.3565,
+          "ensemble_p95": 0.6793,
+          "within_90pct_envelope": true
+        },
+        "max_dry_spell_months": {
+          "historical": 7,
+          "ensemble_median": 5.0,
+          "ensemble_p5": 4.0,
+          "ensemble_p95": 7.0,
+          "within_90pct_envelope": true
+        },
+        "peak": {
+          "historical": 99.2632,
+          "ensemble_median": 154.1673,
+          "ensemble_p5": 77.8441,
+          "ensemble_p95": 414.8663,
+          "within_90pct_envelope": true
+        },
+        "seasonal_amplitude": {
+          "historical": 25.8233,
+          "ensemble_median": 22.3852,
+          "ensemble_p5": 10.8122,
+          "ensemble_p95": 51.3858,
+          "within_90pct_envelope": true
+        }
+      },
+      "validation_n_within": 7,
+      "validation_n_total": 7,
+      "full_record": {
+        "order": [
+          4,
+          0,
+          0
+        ],
+        "historical_properties": {
+          "mean": 16.4228,
+          "std": 18.0153,
+          "skew": 2.0068,
+          "lag1_acf": 0.5359,
+          "peak": 109.734,
+          "max_dry_spell_months": 7,
+          "seasonal_amplitude": 33.4978,
+          "seasonal_means": {
+            "1": 23.0084,
+            "2": 31.4272,
+            "3": 38.8816,
+            "4": 25.5977,
+            "5": 11.7812,
+            "6": 9.9756,
+            "7": 11.8811,
+            "8": 6.9347,
+            "9": 5.3838,
+            "10": 5.3887,
+            "11": 8.8944,
+            "12": 17.9188
+          }
+        },
+        "long_trace_properties": {
+          "mean": 17.4988,
+          "std": 27.4341,
+          "skew": 3.9733,
+          "lag1_acf": 0.5279,
+          "peak": 223.187,
+          "max_dry_spell_months": 6
+        }
+      }
     },
-    {
+    "rainfall": {
+      "unit": "mm/month",
+      "n_months": 420,
+      "n_interpolated_months": 0,
+      "train_period": [
+        "1980-01-01",
+        "2003-12-01"
+      ],
+      "valid_period": [
+        "2004-01-01",
+        "2014-12-01"
+      ],
+      "differencing_d": 0,
+      "stationarity_report": [
+        {
+          "d": 0,
+          "adf_stat": -3.7078,
+          "adf_stationary": true,
+          "kpss_stat": 0.0955,
+          "kpss_stationary": true
+        }
+      ],
       "order": [
-        3,
         1,
-        1
+        0,
+        0
       ],
-      "aic": -24771.13,
-      "bic": -24728.66
-    }
-  ],
-  "ljung_box": {
-    "stat": 18.704,
-    "pvalue": 0.2275
-  },
-  "arch": {
-    "stat": 108.447,
-    "pvalue": 0.0
-  },
-  "jarque_bera": {
-    "stat": 152867.0927,
-    "pvalue": 0.0,
-    "skew": 3.229,
-    "kurtosis": 22.4168
-  },
-  "roots": {
-    "ar": [
-      1.778,
-      1.778,
-      2.405
-    ],
-    "ma": [
-      1.093,
-      1.977
-    ]
-  },
-  "smearing_factor": 1.0414,
-  "discharge_stats": {
-    "mean": 23.446,
-    "min": 0.991,
-    "max": 2044.473,
-    "std": 42.825
-  },
-  "forecast": {
-    "1": {
-      "bias_factor": 1.0295,
-      "model": {
-        "NSE": 0.8241,
-        "RMSE": 14.9077,
-        "PBIAS": 0.9973,
-        "MAE": 4.855,
-        "R2": 0.8281,
-        "PSS": 0.2239,
-        "rating": "Very Good"
+      "aic": -258.23,
+      "bic": -247.28,
+      "phi": [
+        0.051983
+      ],
+      "theta": [],
+      "constant": 4.361159,
+      "standard_errors": {
+        "c": 0.27376,
+        "phi": [
+          0.058943
+        ],
+        "theta": []
       },
-      "median": {
-        "NSE": 0.8267,
-        "RMSE": 14.7957,
-        "PBIAS": -1.8966,
-        "MAE": 4.559,
-        "R2": 0.8281,
-        "PSS": 0.2355,
-        "rating": "Very Good"
+      "aic_ranking": [
+        {
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "aic": -258.23,
+          "bic": -247.28
+        },
+        {
+          "order": [
+            0,
+            0,
+            1
+          ],
+          "aic": -258.2,
+          "bic": -247.26
+        },
+        {
+          "order": [
+            2,
+            0,
+            0
+          ],
+          "aic": -256.27,
+          "bic": -241.67
+        },
+        {
+          "order": [
+            0,
+            0,
+            2
+          ],
+          "aic": -256.27,
+          "bic": -241.67
+        },
+        {
+          "order": [
+            1,
+            0,
+            1
+          ],
+          "aic": -255.7,
+          "bic": -241.1
+        }
+      ],
+      "diagnostics": {
+        "ljung_box": {
+          "stat": 9.69,
+          "pvalue": 0.9602
+        },
+        "arch": {
+          "stat": 16.579,
+          "pvalue": 0.6801
+        },
+        "jarque_bera": {
+          "stat": 43.3795,
+          "pvalue": 0.0,
+          "skew": -0.7686,
+          "kurtosis": 4.1245
+        },
+        "roots": {
+          "ar": [
+            19.237
+          ],
+          "ma": []
+        },
+        "smearing_factor": 1.1898
       },
-      "persistence": {
-        "NSE": 0.7734,
-        "RMSE": 16.9216,
-        "PBIAS": 0.0115,
-        "MAE": 5.3089,
-        "R2": 0.7862,
-        "rating": "Very Good"
+      "historical_stats": {
+        "mean": 118.4638,
+        "std": 67.5947,
+        "skew": 1.2207,
+        "lag1_acf": 0.0494,
+        "peak": 424.47,
+        "max_dry_spell_months": 5,
+        "seasonal_amplitude": 93.865,
+        "seasonal_means": {
+          "1": 131.3896,
+          "2": 127.805,
+          "3": 175.2946,
+          "4": 103.3704,
+          "5": 97.0438,
+          "6": 135.7758,
+          "7": 137.625,
+          "8": 97.1275,
+          "9": 101.4429,
+          "10": 81.4296,
+          "11": 122.1417,
+          "12": 111.12
+        }
+      },
+      "validation": {
+        "mean": {
+          "historical": 116.0222,
+          "ensemble_median": 121.7479,
+          "ensemble_p5": 109.1662,
+          "ensemble_p95": 134.7158,
+          "within_90pct_envelope": true
+        },
+        "std": {
+          "historical": 71.2865,
+          "ensemble_median": 82.4142,
+          "ensemble_p5": 66.1173,
+          "ensemble_p95": 108.5472,
+          "within_90pct_envelope": true
+        },
+        "skew": {
+          "historical": 1.3419,
+          "ensemble_median": 1.8766,
+          "ensemble_p5": 1.1118,
+          "ensemble_p95": 3.7721,
+          "within_90pct_envelope": true
+        },
+        "lag1_acf": {
+          "historical": 0.0287,
+          "ensemble_median": 0.0239,
+          "ensemble_p5": -0.1084,
+          "ensemble_p95": 0.178,
+          "within_90pct_envelope": true
+        },
+        "max_dry_spell_months": {
+          "historical": 3,
+          "ensemble_median": 3.0,
+          "ensemble_p5": 2.0,
+          "ensemble_p95": 4.0,
+          "within_90pct_envelope": true
+        },
+        "peak": {
+          "historical": 382.93,
+          "ensemble_median": 506.6472,
+          "ensemble_p5": 356.1175,
+          "ensemble_p95": 868.0992,
+          "within_90pct_envelope": true
+        },
+        "seasonal_amplitude": {
+          "historical": 79.97,
+          "ensemble_median": 81.7788,
+          "ensemble_p5": 49.8268,
+          "ensemble_p95": 128.8807,
+          "within_90pct_envelope": true
+        }
+      },
+      "validation_n_within": 7,
+      "validation_n_total": 7,
+      "full_record": {
+        "order": [
+          0,
+          0,
+          1
+        ],
+        "historical_properties": {
+          "mean": 117.6965,
+          "std": 68.7003,
+          "skew": 1.2611,
+          "lag1_acf": 0.0431,
+          "peak": 424.47,
+          "max_dry_spell_months": 4,
+          "seasonal_amplitude": 80.1343,
+          "seasonal_means": {
+            "1": 125.7194,
+            "2": 130.1951,
+            "3": 157.9831,
+            "4": 107.4594,
+            "5": 95.6706,
+            "6": 124.6354,
+            "7": 141.4469,
+            "8": 108.7123,
+            "9": 100.7157,
+            "10": 77.8489,
+            "11": 118.6291,
+            "12": 123.3414
+          }
+        },
+        "long_trace_properties": {
+          "mean": 119.2264,
+          "std": 85.037,
+          "skew": 2.0999,
+          "lag1_acf": 0.0782,
+          "peak": 661.5915,
+          "max_dry_spell_months": 4
+        }
       }
     },
-    "2": {
-      "bias_factor": 1.0813,
-      "model": {
-        "NSE": 0.5414,
-        "RMSE": 24.0741,
-        "PBIAS": 0.413,
-        "MAE": 8.638,
-        "R2": 0.5522,
-        "PSS": 0.2442,
-        "rating": "Acceptable"
+    "stage": {
+      "unit": "m",
+      "n_months": 420,
+      "n_interpolated_months": 3,
+      "train_period": [
+        "1980-01-01",
+        "2003-12-01"
+      ],
+      "valid_period": [
+        "2004-01-01",
+        "2014-12-01"
+      ],
+      "differencing_d": 0,
+      "stationarity_report": [
+        {
+          "d": 0,
+          "adf_stat": -4.3808,
+          "adf_stationary": true,
+          "kpss_stat": 0.0479,
+          "kpss_stationary": true
+        }
+      ],
+      "order": [
+        4,
+        0,
+        0
+      ],
+      "aic": -472.87,
+      "bic": -450.98,
+      "phi": [
+        0.811556,
+        -0.073954,
+        -0.02972,
+        -0.203994
+      ],
+      "theta": [],
+      "constant": 0.012762,
+      "standard_errors": {
+        "c": 0.02532,
+        "phi": [
+          0.058179,
+          0.075482,
+          0.075371,
+          0.057868
+        ],
+        "theta": []
       },
-      "median": {
-        "NSE": 0.5487,
-        "RMSE": 23.8837,
-        "PBIAS": -7.1381,
-        "MAE": 7.8412,
-        "R2": 0.5522,
-        "PSS": 0.2561,
-        "rating": "Acceptable"
+      "aic_ranking": [
+        {
+          "order": [
+            4,
+            0,
+            0
+          ],
+          "aic": -472.87,
+          "bic": -450.98
+        },
+        {
+          "order": [
+            4,
+            0,
+            2
+          ],
+          "aic": -472.18,
+          "bic": -442.99
+        },
+        {
+          "order": [
+            4,
+            0,
+            1
+          ],
+          "aic": -470.15,
+          "bic": -444.61
+        },
+        {
+          "order": [
+            3,
+            0,
+            2
+          ],
+          "aic": -469.23,
+          "bic": -443.68
+        },
+        {
+          "order": [
+            3,
+            0,
+            1
+          ],
+          "aic": -465.85,
+          "bic": -443.96
+        }
+      ],
+      "diagnostics": {
+        "ljung_box": {
+          "stat": 38.998,
+          "pvalue": 0.0011
+        },
+        "arch": {
+          "stat": 21.996,
+          "pvalue": 0.3407
+        },
+        "jarque_bera": {
+          "stat": 3.492,
+          "pvalue": 0.1745,
+          "skew": 0.2716,
+          "kurtosis": 2.9974
+        },
+        "roots": {
+          "ar": [
+            1.191,
+            1.191,
+            1.859,
+            1.859
+          ],
+          "ma": []
+        },
+        "smearing_factor": 1.0988
       },
-      "persistence": {
-        "NSE": 0.3933,
-        "RMSE": 27.6912,
-        "PBIAS": 0.0218,
-        "MAE": 9.229,
-        "R2": 0.4853,
-        "rating": "Unsatisfactory"
-      }
-    },
-    "3": {
-      "bias_factor": 1.1276,
-      "model": {
-        "NSE": 0.3472,
-        "RMSE": 28.7274,
-        "PBIAS": 0.1477,
-        "MAE": 10.9587,
-        "R2": 0.3668,
-        "PSS": 0.2671,
-        "rating": "Unsatisfactory"
+      "historical_stats": {
+        "mean": 1.2831,
+        "std": 0.817,
+        "skew": 0.8211,
+        "lag1_acf": 0.6771,
+        "peak": 4.0064,
+        "max_dry_spell_months": 7,
+        "seasonal_amplitude": 1.7919,
+        "seasonal_means": {
+          "1": 1.7783,
+          "2": 2.1157,
+          "3": 2.3725,
+          "4": 1.7722,
+          "5": 1.1107,
+          "6": 0.9851,
+          "7": 1.0217,
+          "8": 0.6934,
+          "9": 0.5807,
+          "10": 0.658,
+          "11": 0.9185,
+          "12": 1.391
+        }
       },
-      "median": {
-        "NSE": 0.359,
-        "RMSE": 28.4664,
-        "PBIAS": -11.1852,
-        "MAE": 9.8136,
-        "R2": 0.3668,
-        "PSS": 0.2803,
-        "rating": "Unsatisfactory"
+      "validation": {
+        "mean": {
+          "historical": 1.0347,
+          "ensemble_median": 1.2695,
+          "ensemble_p5": 1.0932,
+          "ensemble_p95": 1.4751,
+          "within_90pct_envelope": false
+        },
+        "std": {
+          "historical": 0.7465,
+          "ensemble_median": 0.8886,
+          "ensemble_p5": 0.6441,
+          "ensemble_p95": 1.288,
+          "within_90pct_envelope": true
+        },
+        "skew": {
+          "historical": 1.1825,
+          "ensemble_median": 1.7648,
+          "ensemble_p5": 1.0234,
+          "ensemble_p95": 3.4443,
+          "within_90pct_envelope": true
+        },
+        "lag1_acf": {
+          "historical": 0.6415,
+          "ensemble_median": 0.6573,
+          "ensemble_p5": 0.5554,
+          "ensemble_p95": 0.7431,
+          "within_90pct_envelope": true
+        },
+        "max_dry_spell_months": {
+          "historical": 7,
+          "ensemble_median": 5.0,
+          "ensemble_p5": 4.0,
+          "ensemble_p95": 8.0,
+          "within_90pct_envelope": true
+        },
+        "peak": {
+          "historical": 3.7288,
+          "ensemble_median": 5.2093,
+          "ensemble_p5": 3.3994,
+          "ensemble_p95": 9.1472,
+          "within_90pct_envelope": true
+        },
+        "seasonal_amplitude": {
+          "historical": 1.372,
+          "ensemble_median": 0.8106,
+          "ensemble_p5": 0.4376,
+          "ensemble_p95": 1.498,
+          "within_90pct_envelope": true
+        }
       },
-      "persistence": {
-        "NSE": 0.1093,
-        "RMSE": 33.5553,
-        "PBIAS": 0.031,
-        "MAE": 11.7351,
-        "R2": 0.3076,
-        "rating": "Unsatisfactory"
+      "validation_n_within": 6,
+      "validation_n_total": 7,
+      "full_record": {
+        "order": [
+          4,
+          0,
+          0
+        ],
+        "historical_properties": {
+          "mean": 1.2051,
+          "std": 0.8029,
+          "skew": 0.921,
+          "lag1_acf": 0.6742,
+          "peak": 4.0064,
+          "max_dry_spell_months": 7,
+          "seasonal_amplitude": 1.5676,
+          "seasonal_means": {
+            "1": 1.6706,
+            "2": 2.0191,
+            "3": 2.156,
+            "4": 1.7192,
+            "5": 1.0573,
+            "6": 0.8637,
+            "7": 0.9229,
+            "8": 0.7028,
+            "9": 0.6003,
+            "10": 0.5884,
+            "11": 0.8317,
+            "12": 1.3287
+          }
+        },
+        "long_trace_properties": {
+          "mean": 1.1995,
+          "std": 0.975,
+          "skew": 2.1706,
+          "lag1_acf": 0.6801,
+          "peak": 6.3074,
+          "max_dry_spell_months": 6
+        }
       }
     }
   }
