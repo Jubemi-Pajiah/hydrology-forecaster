@@ -6,6 +6,11 @@ on the left, the interactive controls/chart/story in the centre, and a
 compact outlook-card rail on the right -- rather than one narrow centred
 column, so the wide layout is actually used instead of fought.
 
+Redesigned again 2026-08-13 (v3): controls are framed as a future date
+RANGE ("predict from X to Y"), not an "origin + horizon" -- the last real
+data point (Dec 2014) is purely an internal simulation anchor, never a
+concept the user has to think about.
+
 A forecast here is an ENSEMBLE of synthetic monthly sequences, not a single
 point prediction -- re-running gives a different ensemble each time, which
 is the point: a stochastic model's individual forecasts aren't meant to be
@@ -55,7 +60,6 @@ ICONS = {
     "stage": '<path d="M6 3v18M6 3h3M6 8h3M6 13h3M6 18h3" stroke-linecap="round" stroke-linejoin="round"/>'
              '<path d="M14 20l3-13 3 13" stroke-linecap="round" stroke-linejoin="round"/>',
 }
-
 
 
 def svg_icon(name, color, size=22):
@@ -110,6 +114,27 @@ def classify_level(avg_val, hist_mean):
     if ratio > 0.7:
         return "a bit below", "attention"
     return "well below", "attention"
+
+
+def year_stepper(key, min_year, max_year, columns):
+    """A year dropdown (searchable, jump-to-any-year) flanked by -/+ buttons
+    (nudge by one). Buttons are rendered in their own columns before the
+    dropdown so their session_state writes happen before the dropdown widget
+    with the same key is instantiated -- Streamlit forbids writing to a
+    key after its widget exists in the same run."""
+    dec_col, mid_col, inc_col = columns
+    with dec_col:
+        dec_clicked = st.button("−", key=f"{key}_dec", use_container_width=True)
+    with inc_col:
+        inc_clicked = st.button("+", key=f"{key}_inc", use_container_width=True)
+    if dec_clicked:
+        st.session_state[key] = max(min_year, st.session_state[key] - 1)
+    if inc_clicked:
+        st.session_state[key] = min(max_year, st.session_state[key] + 1)
+    with mid_col:
+        st.selectbox("Year", list(range(min_year, max_year + 1)), key=key,
+                    label_visibility="collapsed")
+    return st.session_state[key]
 
 
 def track_record_word(n_ok, n_total):
@@ -246,56 +271,51 @@ st.session_state.setdefault("to_year", 2035)
 st.session_state.setdefault("to_month", "January")
 
 with center:
-    st.markdown('<div class="controls">', unsafe_allow_html=True)
-    st.markdown("**Jump to a range**")
-    preset_cols = st.columns(len(PRESETS))
-    for col, (label, (fy, fm, ty, tm)) in zip(preset_cols, PRESETS.items()):
-        with col:
-            if st.button(label, use_container_width=True):
-                st.session_state["from_year"] = fy
-                st.session_state["from_month"] = fm
-                st.session_state["to_year"] = ty
-                st.session_state["to_month"] = tm
+    with st.container(border=True):
+        st.markdown("**Jump to a range**")
+        preset_cols = st.columns(len(PRESETS))
+        for col, (label, (fy, fm, ty, tm)) in zip(preset_cols, PRESETS.items()):
+            with col:
+                if st.button(label, use_container_width=True):
+                    st.session_state["from_year"] = fy
+                    st.session_state["from_month"] = fm
+                    st.session_state["to_year"] = ty
+                    st.session_state["to_month"] = tm
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**Predict from**")
-        fc1, fc2 = st.columns([1.3, 1])
-        with fc1:
-            from_month = st.selectbox("Month", MONTH_NAMES, key="from_month",
-                                      label_visibility="collapsed")
-        with fc2:
-            from_year = st.number_input("Year", min_value=MIN_YEAR, max_value=2500,
-                                        key="from_year", step=1, label_visibility="collapsed")
-    with c2:
-        st.markdown("**to**")
-        tc1, tc2 = st.columns([1.3, 1])
-        with tc1:
-            to_month = st.selectbox("Month", MONTH_NAMES, key="to_month",
-                                    label_visibility="collapsed")
-        with tc2:
-            to_year = st.number_input("Year", min_value=MIN_YEAR, max_value=2500,
-                                      key="to_year", step=1, label_visibility="collapsed")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Predict from**")
+            fc1, fc2, fc3, fc4 = st.columns([1.3, 0.5, 1, 0.5])
+            with fc1:
+                from_month = st.selectbox("Month", MONTH_NAMES, key="from_month",
+                                          label_visibility="collapsed")
+            from_year = year_stepper("from_year", MIN_YEAR, 2200, (fc2, fc3, fc4))
+        with c2:
+            st.markdown("**to**")
+            tc1, tc2, tc3, tc4 = st.columns([1.3, 0.5, 1, 0.5])
+            with tc1:
+                to_month = st.selectbox("Month", MONTH_NAMES, key="to_month",
+                                        label_visibility="collapsed")
+            to_year = year_stepper("to_year", MIN_YEAR, 2200, (tc2, tc3, tc4))
 
-    display_from = pd.Timestamp(year=st.session_state["from_year"],
-                                month=MONTH_NAMES.index(st.session_state["from_month"]) + 1, day=1)
-    display_to = pd.Timestamp(year=st.session_state["to_year"],
-                              month=MONTH_NAMES.index(st.session_state["to_month"]) + 1, day=1)
-    if display_to < display_from:
-        display_from, display_to = display_to, display_from
-    from_label = display_from.strftime("%B %Y")
-    to_label = display_to.strftime("%B %Y")
+        display_from = pd.Timestamp(year=st.session_state["from_year"],
+                                    month=MONTH_NAMES.index(st.session_state["from_month"]) + 1, day=1)
+        display_to = pd.Timestamp(year=st.session_state["to_year"],
+                                  month=MONTH_NAMES.index(st.session_state["to_month"]) + 1, day=1)
+        if display_to < display_from:
+            display_from, display_to = display_to, display_from
+        from_label = display_from.strftime("%B %Y")
+        to_label = display_to.strftime("%B %Y")
 
-    with st.expander("Advanced settings"):
-        n_reps = st.slider("Synthetic replicates", 100, 1000, 400, 100,
-                           help="More replicates = smoother uncertainty bands, slower to compute.")
-        show_recent_history = st.checkbox(
-            "Show recent observed history alongside the forecast", value=True,
-            help="Only shown when the forecast window starts reasonably soon after "
-                 "the data ends -- otherwise the chart would be mostly empty space.")
+        with st.expander("Advanced settings"):
+            n_reps = st.slider("Synthetic replicates", 100, 1000, 400, 100,
+                               help="More replicates = smoother uncertainty bands, slower to compute.")
+            show_recent_history = st.checkbox(
+                "Show recent observed history alongside the forecast", value=True,
+                help="Only shown when the forecast window starts reasonably soon after "
+                     "the data ends -- otherwise the chart would be mostly empty space.")
 
-    go = st.button("Get the Outlook", type="primary")
-    st.markdown('</div>', unsafe_allow_html=True)
+        go = st.button("Get the Outlook", type="primary")
 
     outputs = {}
     if go:
@@ -430,7 +450,7 @@ with center:
         st.markdown(
             f"""<div class="controls" style="text-align:center;padding:3rem 1.5rem;">
             <p style="font-size:1.0rem;color:{GRAY};margin:0;">
-            Choose a starting point and how far ahead to look above, then press
+            Pick a future range above, then press
             <strong style="color:{BLUE}">Get the Outlook</strong>.</p>
             </div>""",
             unsafe_allow_html=True,
@@ -444,12 +464,19 @@ with right:
 
     if outputs:
         st.markdown(f"**Outlook summary**")
+        st.caption("The colored score on each card is how many of 7 real-world "
+                  "checks that variable's model passed against 11 years of "
+                  "held-out data &mdash; the closest thing this model has to "
+                  "an accuracy grade.", unsafe_allow_html=True)
         for v in ["discharge", "rainfall", "stage"]:
             o = outputs[v]
             record_word, record_color = track_record_word(o["n_ok"], o["n_tot"])
             st.markdown(
                 f"""<div class="card">
-                <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p></div>
+                <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p>
+                    <span class="pill" style="background:{record_color};color:white;margin-left:auto;">
+                        {o['n_ok']}/{o['n_tot']} &nbsp;{record_word.split()[0]}</span>
+                </div>
                 <div class="big-stat">{o['avg_val']:.1f} <span style="font-size:0.85rem;font-weight:500;color:{GRAY}">{UNIT[v]}</span></div>
                 <div>
                     <span class="pill" style="background:{trend_color[o['trend_dir']]}22;color:{trend_color[o['trend_dir']]}">
@@ -457,21 +484,26 @@ with right:
                     <span class="pill" style="background:{level_pill_color[o['level_status']]}22;color:{level_pill_color[o['level_status']]}">
                         {o['level_word'].capitalize()}</span>
                 </div>
-                <div style="margin-top:0.4rem;">
-                    <span class="pill" style="background:{record_color}22;color:{record_color}">{record_word.split()[0]}: {o['n_ok']}/{o['n_tot']}</span>
-                </div>
                 </div>""",
                 unsafe_allow_html=True,
             )
     else:
         st.markdown(f"**Typical levels**")
-        st.caption("Historical averages, shown until you run an outlook.")
+        st.caption("Historical averages. The colored score on each card is how "
+                  "many of 7 real-world checks that variable's model passed "
+                  "against 11 years of held-out data &mdash; the closest thing "
+                  "this model has to an accuracy grade.", unsafe_allow_html=True)
         for v in ["discharge", "rainfall", "stage"]:
             r = results["variables"][v]
             mean_val = r["historical_stats"]["mean"]
+            n_ok, n_tot = r["validation_n_within"], r["validation_n_total"]
+            record_word, record_color = track_record_word(n_ok, n_tot)
             st.markdown(
                 f"""<div class="card">
-                <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p></div>
+                <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p>
+                    <span class="pill" style="background:{record_color};color:white;margin-left:auto;">
+                        {n_ok}/{n_tot} &nbsp;{record_word.split()[0]}</span>
+                </div>
                 <div class="big-stat">{mean_val:.1f} <span style="font-size:0.85rem;font-weight:500;color:{GRAY}">{UNIT[v]}</span></div>
                 <div><span class="pill" style="background:{GRAY}22;color:{GRAY}">Long-term typical</span></div>
                 </div>""",
