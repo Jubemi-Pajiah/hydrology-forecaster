@@ -193,11 +193,18 @@ Tables 4–8.
   Markdown `**bold**` — it is always injected into a raw HTML block
   (`unsafe_allow_html=True`), and Markdown syntax is not parsed inside HTML blocks.
   This was shipped broken once already; don't reintroduce `**` in that function.
-- Forecast origin defaults to the end of the record (2014-12) but is user-selectable;
-  horizon options run from 3 months to 5 years. The record ends 2014-12-31, so any
-  forecast is necessarily historical, not "today" — this is stated in the left rail and
-  in the controls, not buried in a footer caption (an earlier version buried it and
-  testers missed it).
+- **No "horizon from origin" control any more.** The app asks for an explicit "Predict
+  from [month] [year] to [month] [year]" range (plus four jump-to-range presets, e.g.
+  "2030 – 2035"), not a horizon length off a fixed anchor — replaced deliberately after
+  repeated feedback that an origin-plus-horizon framing didn't let a user just say "2050
+  to 2060." Both year fields run from 2015 (the first predictable year after the record
+  ends) up to 2200, with -/+ stepper buttons flanking each year dropdown. Internally the
+  app still simulates forward from the record's last real month (2014-12) to the
+  requested end date and slices the display window, but that's implementation plumbing,
+  not something exposed as an "origin" concept in the UI. The record ends 2014-12-31, so
+  any forecast is necessarily historical, not "today" — stated in the left rail and in
+  the controls, not buried in a footer caption (an earlier version buried it and testers
+  missed it).
 
 ## Deployment note
 The Streamlit app needs `data/conecuh_discharge.csv`, `data/conecuh_rainfall.csv`, and

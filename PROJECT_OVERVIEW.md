@@ -28,29 +28,107 @@ sizing a reservoir or a spillway.
 
 ## 🔁 What changed on 2026-08-12 (read this first)
 
-Two pivots happened in the same day, on supervisor instruction, and they're worth
-understanding before anything else below:
+The whole modelling approach pivoted, per the supervisor's direct feedback (a
+defence-style meeting): **monthly** instead of daily timestep (differencing only does
+real work — removing seasonality — at a monthly step, not a daily one); **three
+independent variables** (discharge, rainfall, stage) instead of discharge alone, to
+demonstrate the same ARIMA machinery generalises across variable types; and
+**stochastic, property-based validation** instead of comparing one forecast to the one
+thing that actually happened, since a stochastic model's individual runs aren't meant
+to match a specific observed sequence — only its statistical *properties* (mean,
+variability, seasonality, drought duration, peak size) should.
 
-1. **A real data error was found and fixed.** Every earlier version of this project
-   (and its committed history) referred to USGS gauge `02361000` as "the Conecuh
-   River." It isn't — NWIS confirms that gauge is the **Choctawhatchee River near
-   Newton, AL**, a different river. A search for the actual Conecuh gauge turned up
-   **USGS 02371500, "Conecuh River at Brantley, AL"** — a real CAMELS basin with a
-   *longer, cleaner* record than the one mistakenly used before (discharge back to
-   1937, not 1980; stage back to 1973; still actively updating). All data was re-pulled
-   under the correct gauge, and every reference to the old gauge number in the live
-   code was corrected.
-2. **The whole modelling approach pivoted**, per the supervisor's direct feedback
-   (a defence-style meeting): **monthly** instead of daily timestep (differencing only
-   does real work — removing seasonality — at a monthly step, not a daily one); **three
-   independent variables** (discharge, rainfall, stage) instead of discharge alone, to
-   demonstrate the same ARIMA machinery generalises across variable types; and
-   **stochastic, property-based validation** instead of comparing one forecast to the
-   one thing that actually happened, since a stochastic model's individual runs aren't
-   meant to match a specific observed sequence — only its statistical *properties*
-   (mean, variability, seasonality, drought duration, peak size) should.
+Everything below describes the project **after** this change.
 
-Everything below describes the project **after** both of these changes.
+---
+
+## 🎓 Questions and Answers From Last Review
+
+This is the actual defence-style review session that drove the 2026-08-12 pivot above —
+extracted question by question from the recording, with what the project does about
+each one today. Some overlap with the curated "Questions to expect" list further down;
+this is the direct, literal record.
+
+**Q: "Why are you using ARIMA? AR alone? MA alone? ARMA? ARIMA? ARIMAX? There are many
+variants — why introduce all of them?"**
+A: Because they each answer a different question about a series' memory (past values
+only, past shocks only, both, both plus differencing, both plus an outside variable),
+and the project doesn't just assert ARIMA — it runs an explicit family comparison in
+the literature review and lets an AIC-based grid search choose the specific structure
+per variable from the data itself, not from preference. → *Report Ch.2 §2.4.*
+
+**Q: "Why are you using daily data with ARIMA? You won't gain anything from the
+differencing... but if you difference monthly flows, you actually gain something,
+because it removes the seasonality."**
+A: Fixed, exactly along those lines — the whole pipeline now runs at a monthly
+timestep. Daily discharge doesn't have a seasonal cycle for differencing to usefully
+remove; monthly does. → *Report Ch.1 §1.5, Ch.3 §3.1.*
+
+**Q: "How do you estimate the parameters? The p, d, q you mentioned are not the
+parameters — that's just the order. How do you estimate the autoregressive component?
+The moving average parameters? How did you get it?"**
+A: p, d, q are the order (structure), chosen by AIC. The actual parameters — the AR
+(phi) and MA (theta) coefficients — are estimated by conditional sum of squares, and
+every one is reported with a standard error, not just a value. → *Report Ch.3 §3.5,
+Ch.4 Table 5; app "For the curious" panel.*
+
+**Q: "Can you even forecast? 'I can only forecast 7 days' — that's terrible. Why?"**
+A: That was a real bug (a leftover default), now removed. The app forecasts any
+user-chosen future range via explicit "predict from/to" month-and-year controls.
+
+**Q: "Your data is up to 2014 — how do you now know 2015 is correct? How do you check
+that? How do we know it's not garbage that you have forecasted?"**
+A: You can't check one stochastic run against one real sequence — every run differs by
+design. What's actually checkable, and is checked, is whether the historical record's
+statistical properties (mean, variability, seasonality, drought length, peak size) fall
+within the range a 1,000-member synthetic ensemble produces. → *Report §3.6, §4.6.*
+
+**Q: "The data is bulky — 35 years, 365 days a year — is that bulky for a computer?"**
+A: Not for a computer, no, and that was never really the constraint. The reason the
+project moved to monthly wasn't data volume — it was that differencing only does
+useful work (removing seasonal drift) at a monthly step, which is the point made two
+questions above.
+
+**Q: "Which year to which year did you use — 1980 to 2014?"**
+A: Yes — 420 months, split 1980–2003 (288 months) to identify order and estimate
+parameters, and 2004–2014 (132 months) held back entirely for validation. → *Report
+Ch.3 §3.4.*
+
+**Q: "When you're forecasting stochastic data, you can't compare to real data — each
+forecast is different, so how can you compare it to 2015? It's meaningless. You can
+only compare the parameters — the properties — of what you forecast to the properties
+of the original data."**
+A: Agreed, and that's exactly the current validation design: the project never compares
+one synthetic run to the one thing that actually happened. It compares the ensemble's
+statistical properties to history's. This is the core idea of the whole 2026-08-12
+rebuild. → *Report §4.6, Table 7.*
+
+**Q: "Why are you using whatever river in the US? Have you checked for monthly data in
+Nigeria that you didn't find?"**
+A: Yes — NIHSA was checked directly, not skipped, and couldn't give a firm price or
+delivery date inside the project deadline. Conecuh was already downloaded, verified,
+and clean, so it became the working basin while the Nigerian request stayed open — a
+disclosed trade-off. → *Report Ch.1 §1.5; "Why Conecuh, specifically" below.*
+
+**Q: "This business of 'not enough data' isn't really relevant — it's precisely
+because you don't have enough data that you're forecasting. If you had huge data, why
+would you be forecasting at all?"**
+A: Agreed — this is the actual justification given for stochastic hydrology in the
+literature review, not "35 years is too little" or "too much." → *Report Ch.2
+(Matalas, 1967).*
+
+**Q: "Forecast rainfall from rainfall, runoff from runoff — there's no difference. Your
+model doesn't change, it's the same model. You should be able to estimate the
+parameters for whatever data you put in."**
+A: That is exactly how it's built: one ARIMA implementation, applied unmodified to
+discharge, rainfall, and stage — only the fitted coefficients differ between them, not
+the code. → *Report §2.4, §3.2; app: switch tabs between the three variables.*
+
+**Q: "You have to show that the ARIMA model fits the data — ARIMA can't be used for
+just anything, you must show the data itself fits it, not assume it."**
+A: Every variable runs through ADF and KPSS stationarity tests before a model is
+chosen, and the evidence — not just the conclusion — is reported and shown live in the
+app. → *Report §3.5, §4.2; app "For the curious" → stationarity evidence line.*
 
 ---
 
@@ -62,9 +140,10 @@ challenge "why", "how", and "where did this come from" across the whole document
 just skim it). Real, checkable problems came out of both rounds, and each was either
 fixed directly or deliberately deferred and disclosed — not silently dropped:
 
-**Fixed directly** — a Table 8 arithmetic error (text said 13/21 property checks passed;
-the data said 20/21); a missing "Table 1" caused by an earlier deletion, which had
-silently shifted every later table number by one; an ARCH-test paragraph that had
+**Fixed directly** — an arithmetic error in the property-validation summary (text said
+13/21 property checks passed; the data said 20/21 — this is now Table 7, after the
+table-numbering fixes below); a missing "Table 1" caused by an earlier deletion, which
+had silently shifted every later table number by one; an ARCH-test paragraph that had
 rainfall and stage's borderline p-values backwards; a Jarque–Bera paragraph that claimed
 normality was rejected for "every variable" when the data show only rainfall's residuals
 actually fail that test.
@@ -147,7 +226,7 @@ the fast-reference version.
   are the *order* (structure), chosen by AIC. The actual parameters are the phi (AR) and
   theta (MA) coefficients, estimated by conditional sum of squares, each with a standard
   error. → *App "For the curious" → coefficient table per variable. Report Ch.3 §3.5,
-  Ch.4 §4.4 (Table 6, Fig.6).*
+  Ch.4 §4.4 (Table 5, Fig.5).*
 - **"You must show the data fits ARIMA, not assume it."** Each variable runs through
   ADF and KPSS stationarity tests before a model is picked, and the result is shown, not
   just the conclusion. → *App "For the curious" → stationarity evidence line. Report
@@ -156,7 +235,10 @@ the fast-reference version.
 **On whether it can even forecast**
 
 - **"Can it forecast? Why only 7 days?"** That cap is gone — leftover default, not a
-  real limit. Horizon now goes up to 5 years. → *App "How far ahead" control.*
+  real limit. The app now takes an explicit "predict from [month/year] to [month/year]"
+  range, not a horizon length off a fixed anchor, so it can target any future window
+  (2030–2035, 2050–2060, whatever is asked for) rather than a capped number of days or
+  years ahead. → *App "Predict from / to" controls.*
 
 **On checking correctness**
 
@@ -168,41 +250,33 @@ the fast-reference version.
   §4.6.*
 - **"Stochastic forecasts — you can only compare properties, not the forecast itself."**
   Yes, exactly — that's the whole 2026-08-12 rebuild in one sentence.
-- **"Is 34 years 'not enough', or daily data 'too much'?"** Neither is the point —
+- **"Is 35 years 'not enough', or daily data 'too much'?"** Neither is the point —
   forecasting exists because the future is never in hand, regardless of how much history
   you have. → *Report Ch.2 (Matalas 1967, stochastic hydrology).*
 
 **On the study basin**
 
-- **"Why a US river? That's a standard panel question."** We looked into Nigeria
-  seriously — see below for the specific numbers. Short version: neither Nigerian
-  custodian could give a firm price or delivery date inside the project timeline, so the
-  pipeline was built on the Conecuh record, already in hand and verified. The Nigerian
-  request stayed open as a possible future swap — this is a disclosed trade-off, not a
-  hidden one. → *Report Ch.1 §1.5.*
+- **"Why a US river? That's a standard panel question."** The Nigerian custodian
+  (NIHSA) was checked directly, not skipped — see below for the specific numbers. Short
+  version: it couldn't give a firm price or delivery date inside the project timeline,
+  so the pipeline was built on the Conecuh record, already in hand and verified. The
+  Nigerian request stayed open as a possible future swap — this is a disclosed
+  trade-off, not a hidden one. → *Report Ch.1 §1.5.*
 
 ### Why Conecuh, specifically — the Nigerian data attempt
 
-Two real custodians hold Nigerian river data, and both were checked, not skipped:
-
-- **NIHSA (Nigeria Hydrological Services Agency)** — the federal agency under the
-  Ministry of Water Resources, running 273 gauging stations nationwide, holding stage,
-  discharge, sediment and water-quality records. Has a real online request form
-  (`nihsa.gov.ng/data-request`) stating **5–7 working days** turnaround for
-  straightforward requests. But **it publishes no fee schedule** — cost is assessed per
-  request and only communicated *after* NIHSA reviews it, so there was no way to know in
-  advance whether a request would be free, discounted, or a real cost, or the true
-  delivery date once that review step is added on.
-- **OORBDA (Ogun-Osun River Basin Development Authority)** — the authority that actually
-  operates the gauging stations on the Ogun and Yewa rivers, the right rivers for a
-  Lagos-relevant study. Access is by formal letter on departmental letterhead, with no
-  published turnaround at all.
-
-Given the project deadline, the methodology couldn't be built around data with an
-unknown price *and* an unknown delivery date. The Conecuh record was already downloaded,
-verified against USGS NWIS, and clean across all three variables, so it became the
-working basin while the Nigerian request stayed open. A Beninese fallback (AMMA-CATCH —
-free, no request needed) was also scoped; see `DATA_OPTIONS.md` for the full breakdown.
+NIHSA (Nigeria Hydrological Services Agency) has a real online request form
+(`nihsa.gov.ng/data-request`) stating **5–7 working days** turnaround for
+straightforward requests, but the request is **not free** — cost is assessed per
+request and only communicated after NIHSA reviews it, so neither a firm price nor a
+true delivery date could be known in advance, inside a project deadline. CAMELS, by
+contrast, already provides free, ready-to-use monthly data for hundreds of US basins —
+which is exactly what made it possible to test transferability on two more basins (the
+cross-basin check, Report §4.8) at zero cost and no wait. The method itself doesn't care
+which country supplied the numbers: it's the same ARIMA procedure applied to whatever
+series is in front of it, so if the Nigerian data comes through, it would run on a
+Nigerian basin exactly as it already runs on Conecuh and the two supplementary US
+basins. See `DATA_OPTIONS.md` for the full investigation.
 
 **On generalisation and design use (added after the 2026-08-13 review rounds)**
 
@@ -251,9 +325,8 @@ not assumed.
 
 ## 🎯 The basin and the models
 
-**Conecuh River at Brantley, Alabama (USA)** — USGS/CAMELS gauge `02371500` (the
-*correct* gauge, see above). 35 years of monthly data (1980–2014, 420 months), trained
-on 1980–2003, validated on 2004–2014.
+**Conecuh River at Brantley, Alabama (USA)** — USGS/CAMELS gauge `02371500`. 35 years of
+monthly data (1980–2014, 420 months), trained on 1980–2003, validated on 2004–2014.
 
 | Variable | Selected model | Validation: properties within envelope |
 |---|---|---|
@@ -302,20 +375,23 @@ No external time-series modelling library (no `statsmodels`).
 
 ## ✅ Where it stands
 
-- **Data:** re-pulled and verified for the correct gauge (02371500). Discharge 0.56%
-  missing at daily resolution, effectively complete monthly; rainfall complete
-  (zero missing days, Daymet product); stage complete monthly (zero fully-missing
-  months).
+- **Data:** verified against USGS NWIS for gauge 02371500. Discharge 0.56% missing at
+  daily resolution, effectively complete monthly (0 of 420 months fully missing);
+  rainfall complete (zero missing days, Daymet product, 0 of 420 months fully missing);
+  stage 3 of 420 months fully missing and filled by time-based linear interpolation —
+  disclosed, not hidden.
 - **Models:** all three variables fitted, diagnosed, and validated. Full diagnostics
   (Ljung-Box, ARCH, Jarque-Bera, characteristic roots) computed and reported honestly,
   including where they don't pass.
-- **App:** redesigned twice — first for per-variable stochastic forecasting, then
-  rebuilt again as "River Outlook," a one-click dashboard that forecasts all 3
+- **App:** redesigned repeatedly, in response to real feedback each round — from a
+  per-variable form into "River Outlook," a one-click dashboard that forecasts all 3
   variables together with a plain-language explanation per variable, a 3-pane layout
-  (not a narrow centred column), and a "For the curious" panel exposing the actual
-  AR/MA coefficients, their standard errors, and the stationarity test evidence — not
-  just the model order. Tested end-to-end in a real browser, committed and pushed —
-  the live Render deployment updates automatically from this.
+  (not a narrow centred column), a "For the curious" panel exposing the actual AR/MA
+  coefficients, their standard errors, and the stationarity test evidence, and finally
+  an explicit "predict from/to" date-range control replacing an earlier
+  horizon-from-2014 framing that couldn't express an arbitrary future window. Tested
+  end-to-end in a real browser, committed and pushed — the live Render deployment
+  updates automatically from this.
 - **Report:** Chapters 1–5 rewritten — corrected basin identity throughout, added an
   explicit AR/MA/ARMA/ARIMA/ARIMAX comparison to the literature review, rewrote the
   methodology chapter around monthly/multi-variable/stochastic validation, rewrote the
