@@ -635,9 +635,9 @@ def write_chapter4(doc, R, figures_dir, eq):
          "Third, stochastic property-based validation is a stricter test "
          "than it might appear, and the one property that fails — stage's "
          "mean — demonstrates that: a validation procedure that always "
-         "passes would not be doing useful work. Thirteen of twenty-one "
+         "passes would not be doing useful work. Twenty of twenty-one "
          "property checks across the three variables (seven each) pass, "
-         "which is an honest, moderately strong result rather than a "
+         "which is an honest, strong result rather than a "
          "manufactured one, and the single failure is traceable to a "
          "diagnosed and disclosed limitation (residual seasonal structure) "
          "rather than to an unexplained discrepancy.")

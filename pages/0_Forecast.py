@@ -56,7 +56,6 @@ ICONS = {
              '<path d="M14 20l3-13 3 13" stroke-linecap="round" stroke-linejoin="round"/>',
 }
 
-HORIZON_OPTIONS = {"3 months": 3, "6 months": 6, "1 year": 12, "2 years": 24, "5 years": 60}
 
 
 def svg_icon(name, color, size=22):
@@ -121,6 +120,16 @@ def track_record_word(n_ok, n_total):
     return "Weak track record", RED
 
 
+def fmt_span(months):
+    """'192 months' reads badly for a 16-year horizon; show years once it's
+    long enough for that to be the natural unit."""
+    if months >= 24 and months % 12 == 0:
+        return f"{months // 12} years"
+    if months >= 24:
+        return f"{months / 12:.1f} years"
+    return f"{months} months"
+
+
 def build_narrative(variable, unit, horizon_months, origin_label, avg_val,
                     hist_mean, trend_word, level_word, n_ok, n_total):
     """Fill-in-the-blanks narrative. Uses <strong> (not Markdown **bold**)
@@ -130,7 +139,7 @@ def build_narrative(variable, unit, horizon_months, origin_label, avg_val,
     confidence = "a solid" if n_ok >= 6 else ("a reasonable" if n_ok >= 4 else "a rough")
     return (
         f"We are forecasting <strong>{var_label}</strong> for the <strong>{BASIN_SHORT}</strong> "
-        f"over the next <strong>{horizon_months} months</strong>, starting "
+        f"over the next <strong>{fmt_span(horizon_months)}</strong>, starting "
         f"<strong>{origin_label}</strong>. Based on the result, we see {var_label} "
         f"<strong>{trend_word}</strong>, averaging about <strong>{avg_val:.1f} {unit}</strong> "
         f"&mdash; {level_word} the typical level of {hist_mean:.1f} {unit}. Our model's outlook "
@@ -222,8 +231,11 @@ with left:
         <div class="rail-fact"><span>Method</span><b>ARIMA (Box&ndash;Jenkins)</b></div>
         <p style="margin-top:0.6rem;">The starting point has to be a month we've actually
         measured, so the model has real history to build from &mdash; that's why it can't
-        start in 2018 or today. But it can look as far <em>ahead</em> from that point as
-        you like: a 5-year horizon from Dec 2014 reaches all the way to Dec 2019.</p>
+        start in 2018 or today. But it can project <em>forward</em> from that point to
+        any year you type in &mdash; 2030, 2050, 2100, no ceiling. The further out you
+        go, the wider the plausible range gets &mdash; that's the model being honest
+        about how much less certain a 50-year-out guess is than a 1-year one, not a
+        flaw.</p>
         </div>""",
         unsafe_allow_html=True,
     )
@@ -251,11 +263,16 @@ with center:
         else:
             origin_ts = last_month
     with c2:
-        horizon_label = st.segmented_control(
-            "How far ahead from that point", options=list(HORIZON_OPTIONS.keys()),
-            default="1 year", required=True,
+        target_year = st.number_input(
+            "Project out to year", min_value=origin_ts.year + 1, max_value=2500,
+            value=2035, step=1,
+            help="Pick any year you want to see. No ceiling beyond the input box "
+                 "itself -- type 2050, 2100, whatever you need.",
         )
-        horizon = HORIZON_OPTIONS.get(horizon_label, 12)
+        horizon_years = target_year - origin_ts.year
+        horizon = horizon_years * 12
+        st.caption(f"That's **{horizon_years} years** past {origin_ts:%b %Y}.",
+                  unsafe_allow_html=True)
 
     with st.expander("Advanced settings"):
         n_reps = st.slider("Synthetic replicates", 100, 1000, 400, 100,
@@ -299,7 +316,8 @@ with center:
                 )
 
     if outputs:
-        st.markdown(f"#### The picture behind the outlook &mdash; {horizon} months from {origin_label}")
+        st.markdown(f"#### The picture behind the outlook &mdash; {fmt_span(horizon)} from {origin_label} "
+                   f"(reaching {(origin_ts + pd.DateOffset(months=horizon)).year})")
         tabs = st.tabs([VAR_LABEL[v] for v in ["discharge", "rainfall", "stage"]])
         for tab, v in zip(tabs, ["discharge", "rainfall", "stage"]):
             o = outputs[v]
