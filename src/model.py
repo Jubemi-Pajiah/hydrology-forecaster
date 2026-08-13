@@ -231,6 +231,7 @@ class ARIMA:
         self.nobs = None
         self.resid_ = None
         self._y_train = None
+        self._XtX_inv = None
 
     # -- internal: conditional residuals for a differenced series w ----------
     def _css_resid(self, w, c, phi, theta):
@@ -300,6 +301,7 @@ class ARIMA:
         k = p + q + 1 + 1  # AR + MA + constant + variance
         self._w_train = w
 
+        self._XtX_inv = None
         if q == 0:
             # Exact OLS for pure AR(p) (with constant)
             if p == 0:
@@ -312,9 +314,10 @@ class ARIMA:
                     [np.ones(rows)] + [w[p - i - 1: len(w) - i - 1] for i in range(p)]
                 )
                 target = w[p:]
-                beta, resid, _ = _ols(X, target)
+                beta, resid, XtX_inv = _ols(X, target)
                 self.c = float(beta[0])
                 self.phi = beta[1:]
+                self._XtX_inv = XtX_inv
         else:
             # CSS optimisation for ARMA(p, q)
             x0 = np.zeros(1 + p + q)
@@ -356,6 +359,79 @@ class ARIMA:
         else:
             self.aic_c, self.bic_c, self.nobs_c = self.aic, self.bic, n_eff
         return self
+
+    # -- parameter uncertainty ------------------------------------------------
+    def standard_errors(self) -> dict:
+        """
+        Asymptotic standard errors of the estimated coefficients (c, phi,
+        theta) -- the piece of the estimation this project's supervisor
+        singled out as missing ("how do you estimate the parameters? that's
+        where the work is").
+
+        For pure AR(p) (q = 0) these are the exact OLS standard errors from
+        the fit's normal equations. For mixed ARMA(p, q) (q > 0), estimated
+        by conditional sum of squares, they come from the numerical Hessian
+        of the (Gaussian) conditional log-likelihood at the optimum:
+        Cov(theta_hat) ~= [Hessian(-logL)]^-1 -- the standard asymptotic
+        result for CSS/ML ARMA estimation (Box, Jenkins & Reinsel, 2008,
+        ch. 7). NaN entries mean the Hessian was not (numerically) positive
+        definite at the optimum, typically a coefficient pinned near its
+        stationarity/invertibility bound.
+
+        Returns {"c": se, "phi": [se, ...], "theta": [se, ...]}.
+        """
+        p, q = self.p, self.q
+        if q == 0:
+            if p == 0 or self._XtX_inv is None:
+                se_c = float(np.sqrt(self.sigma2 / self.nobs)) if self.nobs else float("nan")
+                return {"c": se_c, "phi": [], "theta": []}
+            se = np.sqrt(np.diag(self._XtX_inv) * self.sigma2)
+            return {"c": float(se[0]), "phi": se[1:].tolist(), "theta": []}
+
+        # Mixed ARMA: numerical Hessian of the CSS negative log-likelihood
+        # (up to the parameter-independent constants of the Gaussian
+        # log-likelihood, which don't affect the Hessian).
+        w = self._w_train
+        m = max(p, q)
+        n_eff = len(w) - m
+        k = 1 + p + q
+
+        def negloglik(x):
+            c, phi, theta = self._unpack(x)
+            with np.errstate(over="ignore", invalid="ignore"):
+                e = self._css_resid(w, c, phi, theta)[m:]
+                ssr = np.dot(e, e)
+            if not np.isfinite(ssr) or ssr <= 0:
+                return 1e12
+            return 0.5 * n_eff * np.log(ssr / n_eff + 1e-12)
+
+        x0 = self._pack()
+        h = 1e-4 * np.maximum(np.abs(x0), 1e-2)
+        H = np.zeros((k, k))
+        for i in range(k):
+            for j in range(i, k):
+                xpp, xpm = x0.copy(), x0.copy()
+                xmp, xmm = x0.copy(), x0.copy()
+                xpp[i] += h[i]; xpp[j] += h[j]
+                xpm[i] += h[i]; xpm[j] -= h[j]
+                xmp[i] -= h[i]; xmp[j] += h[j]
+                xmm[i] -= h[i]; xmm[j] -= h[j]
+                H[i, j] = H[j, i] = (
+                    negloglik(xpp) - negloglik(xpm) - negloglik(xmp) + negloglik(xmm)
+                ) / (4 * h[i] * h[j])
+
+        try:
+            cov = np.linalg.inv(H)
+            diag = np.diag(cov)
+            se_all = np.where(diag >= 0, np.sqrt(np.maximum(diag, 0)), np.nan)
+        except np.linalg.LinAlgError:
+            se_all = np.full(k, np.nan)
+
+        return {
+            "c": float(se_all[0]),
+            "phi": se_all[1:1 + p].tolist(),
+            "theta": se_all[1 + p:1 + p + q].tolist(),
+        }
 
     # -- diagnostics ---------------------------------------------------------
     def _psi_weights(self, nmax):

@@ -1,6 +1,9 @@
 """
 pages/1_Documentation.py — Documentation and user guide for the statistical
-(ARIMA) streamflow forecasting app.
+(ARIMA) hydrological forecasting app.
+
+Rewritten 2026-08-12 for the monthly, three-variable, stochastic-validation
+pipeline.
 """
 import json
 from pathlib import Path
@@ -48,24 +51,22 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-model_name = R.get("model", "ARIMA(3, 1, 2)")
-d = R.get("differencing_d", 1)
-nse1 = R.get("forecast", {}).get("1", {}).get("model", {}).get("NSE", 0.827)
-pss1 = R.get("forecast", {}).get("1", {}).get("model", {}).get("PSS", 0.236)
-lb_p = R.get("ljung_box", {}).get("pvalue", 0.228)
+variables = R.get("variables", {})
+basin = R.get("basin", "Conecuh River at Brantley, Alabama (USGS 02371500)")
 
 st.title("Documentation")
 st.caption(
-    "Conecuh River Streamflow Forecaster  ·  "
-    "Civil & Environmental Engineering, University of Lagos  ·  "
+    "Conecuh River Stochastic Forecaster  ·  "
+    "Civil & Environmental Engineering  ·  "
     "Ugbodaga Benedict Osikpemi  ·  2026"
 )
 
 st.markdown(
     """<div class="callout">
-    This page explains <strong>what the app does</strong>, the <strong>statistical method behind it</strong>,
-    and <strong>how to read the output</strong>. The model forecasts river discharge from its own
-    past values only &mdash; there is no rainfall or weather input.
+    This page explains <strong>what the app does</strong>, the <strong>statistical method behind
+    it</strong>, and <strong>how to read the output</strong>. Three independent models forecast
+    discharge, rainfall, and stage, each from its own past monthly values only &mdash; there is
+    no cross-variable input, and no weather forecast is consumed.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -74,23 +75,23 @@ st.markdown(
 st.markdown("## 1. What This App Does")
 st.markdown(
     f"""
-This application forecasts **short-term river discharge** (streamflow) for the
-**Conecuh River, Alabama, USA** (USGS gauge 02361000) for the next 1&ndash;7 days.
+This application forecasts **monthly discharge, rainfall, and stage** for the
+**{basin}** using three separate statistical time-series models, one per variable.
 
-Unlike a rainfall-runoff model, it requires **no weather input at all**. It is a
-**statistical time-series model** that learns the temporal behaviour of the river
-directly from its **historical discharge record** and projects that behaviour forward.
-The model used is **{model_name}**, an autoregressive integrated moving average
-(ARIMA) model identified through the Box&ndash;Jenkins methodology.
+Each is a **statistical ARIMA model** (Box&ndash;Jenkins methodology) that learns a
+variable's temporal behaviour directly from its own historical record and projects
+that behaviour forward -- no rainfall-runoff routing, no cross-variable input, and
+(critically) **no single "correct" forecast**: because the model is stochastic, it
+produces an **ensemble of plausible future sequences**, not one number.
 """
 )
 st.markdown(
     """<div class="callout">
-    <strong>Why discharge-only?</strong> Daily river flow is highly autocorrelated &mdash;
-    today's flow is the single best predictor of tomorrow's. A statistical model exploits this
-    directly, avoiding the data demands and calibration uncertainty of process-based models.
-    This makes it well suited to settings where reliable flow records exist but dense weather
-    networks do not.
+    <strong>Why three separate models instead of one?</strong> The same ARIMA machinery applies
+    to any series that fits its assumptions -- streamflow, rainfall, water level, even stock
+    prices. Rather than building one model to predict discharge and hoping it generalises,
+    this app estimates three independent models, one per variable, and shows that the same
+    identification/estimation/validation procedure works for all three.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -99,28 +100,40 @@ st.markdown(
 st.markdown("## 2. The Method — How the Model Works")
 st.markdown(
     """
-The model belongs to the **ARIMA(p, d, q)** family (Box & Jenkins, 1976), which describes
+Each model belongs to the **ARIMA(p, d, q)** family (Box & Jenkins, 1976), which describes
 a time series using three ingredients:
 
-- **AR (autoregressive), order p** — the current value depends on its own *p* previous values.
-- **I (integrated), order d** — the series is *differenced* *d* times to remove trend and
-  make it stationary (statistically stable over time).
-- **MA (moving average), order q** — the current value depends on the *q* previous random shocks.
+- **AR (autoregressive), order p** — the current value depends on its own *p* previous
+  monthly values.
+- **I (integrated), order d** — the series is *differenced* *d* times to remove trend or
+  slow drift and make it stationary. (At a **daily** timestep, differencing gains almost
+  nothing for a river that never truly trends; at a **monthly** timestep it can remove
+  genuine seasonal drift where present -- part of why this project moved from a daily to a
+  monthly timestep.)
+- **MA (moving average), order q** — the current value depends on the *q* previous random
+  shocks.
+
+Related, simpler members of the same family exist -- a pure **AR(p)** model (no MA term),
+a pure **MA(q)** model (no AR term), an **ARMA(p, q)** model (no differencing, i.e. d = 0),
+and **ARIMAX**, which adds exogenous input variables. This project uses plain ARIMA, not
+ARIMAX, deliberately: each variable is forecast from its own past only, by design, so
+there is no exogenous driver to add.
 """
 )
-st.markdown("### Working on log-discharge")
+st.markdown("### Working on log-transformed values")
 st.markdown(
     """
-Because daily discharge is strongly right-skewed and its variability grows with its size,
-the model is fitted to the **natural logarithm** of discharge. This stabilises the variance
-and stops a few large flood peaks from dominating the fit. Forecasts are converted back to
-m&sup3;/s by exponentiation.
+Streamflow, rainfall, and stage are all strictly positive and right-skewed, with
+variability that grows with magnitude, so each model is fitted to the **natural
+logarithm** of its variable. This stabilises variance and stops a few extreme months
+from dominating the fit. Forecasts are converted back to natural units by exponentiation.
 """
 )
 st.markdown("### The model equation")
 st.markdown(
     """<div class="eq-box">
-    Let z(t) = ln[Q(t)] and w(t) = (1 &minus; B)<sup>d</sup> z(t) be the differenced series.<br><br>
+    Let z(t) = ln[X(t)] for variable X, and w(t) = (1 &minus; B)<sup>d</sup> z(t) be the
+    differenced series.<br><br>
     w(t) = c + &phi;<sub>1</sub> w(t&minus;1) + &hellip; + &phi;<sub>p</sub> w(t&minus;p)
     + a(t) + &theta;<sub>1</sub> a(t&minus;1) + &hellip; + &theta;<sub>q</sub> a(t&minus;q)<br><br>
     where &phi; are the autoregressive coefficients, &theta; the moving-average coefficients,
@@ -130,81 +143,106 @@ st.markdown(
 )
 
 # 3 ---------------------------------------------------------------------------
-st.markdown("## 3. How the Model Was Built (Box-Jenkins)")
-st.markdown(
-    f"""
-1. **Stationarity testing.** The Augmented Dickey&ndash;Fuller (ADF) and KPSS tests were applied
-   to decide the differencing order. Both agreed that **one difference (d = {d})** yields a
-   stationary series.
-2. **Order identification.** The autocorrelation (ACF) and partial autocorrelation (PACF)
-   functions of the differenced series suggested candidate AR and MA orders.
-3. **Estimation.** Model coefficients were estimated by **conditional sum of squares**;
-   pure AR models were solved exactly by least squares.
-4. **Order selection.** All candidate orders were ranked by the **Akaike Information
-   Criterion (AIC)**, which balances fit against parsimony. The winner was **{model_name}**.
-5. **Diagnostic check.** The **Ljung&ndash;Box test** confirmed the residuals are
-   indistinguishable from white noise (p = {lb_p:.3f} &gt; 0.05), so the model is adequate.
-"""
-)
-
-# 4 ---------------------------------------------------------------------------
-st.markdown("## 4. Data")
+st.markdown("## 3. How Each Model Was Built (Box-Jenkins)")
 st.markdown(
     """
-| Item | Detail |
-|------|--------|
-| **Basin** | Conecuh River, Alabama, USA |
-| **Gauge** | USGS 02361000 (CAMELS dataset) |
-| **Variable** | Daily mean discharge only (converted ft&sup3;/s &rarr; m&sup3;/s) |
-| **Record** | 1 Jan 1980 &ndash; 31 Dec 2014 (12,784 days) |
-| **Training** | 1980&ndash;2003 (model identification & estimation) |
-| **Validation** | 2004&ndash;2014 (out-of-sample skill assessment) |
-| **Source** | Newman et al. (2015); Addor et al. (2017) |
-
-No rainfall, temperature, evapotranspiration or any other variable is used.
+1. **Stationarity testing.** The Augmented Dickey&ndash;Fuller (ADF) and KPSS tests are
+   applied, jointly, to decide each variable's differencing order d.
+2. **Order identification.** The autocorrelation (ACF) and partial autocorrelation (PACF)
+   functions of the (differenced) training series suggest candidate AR and MA orders.
+3. **Estimation.** Coefficients are estimated by **conditional sum of squares** (pure AR
+   models solved exactly by ordinary least squares), together with a **standard error on
+   every coefficient** -- from the OLS normal equations for pure-AR models, or from the
+   numerical Hessian of the conditional log-likelihood for mixed ARMA models. This is the
+   step that answers "how do you estimate the parameters", not just "what order did you
+   pick" -- the two are different questions.
+4. **Order selection.** All candidate orders are ranked by the **Akaike Information
+   Criterion (AIC)**, which balances fit against parsimony.
+5. **Diagnostic check.** The **Ljung&ndash;Box**, **ARCH**, and **Jarque&ndash;Bera** tests
+   check, respectively, whether residual autocorrelation remains, whether volatility
+   clustering is present, and whether residuals are normally distributed.
 """
 )
-
-# 5 ---------------------------------------------------------------------------
-st.markdown("## 5. Forecast Skill and the Persistence Benchmark")
-st.markdown(
-    f"""
-Skill was measured by rolling-origin (walk-forward) forecasting over the validation period:
-for every day the model forecasts 1, 2 and 3 days ahead using only past observations.
-
-Because daily flow is so autocorrelated, the naive **persistence** forecast
-(&ldquo;tomorrow equals today&rdquo;) is already a strong competitor. The decisive metric is
-therefore the **persistence skill score (PSS)**:
-"""
-)
-st.markdown(
-    """<div class="eq-box">PSS = 1 &minus; MSE(model) / MSE(persistence)</div>""",
-    unsafe_allow_html=True,
-)
-if R.get("forecast"):
+if variables:
     rows = "".join(
-        f"<tr><td>{k}-day</td>"
-        f"<td>{R['forecast'][k]['model']['NSE']:.3f}</td>"
-        f"<td>{R['forecast'][k]['model']['RMSE']:.2f}</td>"
-        f"<td>{R['forecast'][k]['model']['PSS']:+.3f}</td>"
-        f"<td>{R['forecast'][k]['persistence']['NSE']:.3f}</td></tr>"
-        for k in ("1", "2", "3")
+        f"<tr><td>{v.capitalize()}</td><td>ARIMA{tuple(r['order'])}</td>"
+        f"<td>{r['differencing_d']}</td><td>{r['aic']:.1f}</td>"
+        f"<td>{r['diagnostics']['ljung_box']['pvalue']:.4f}</td></tr>"
+        for v, r in variables.items()
     )
     st.markdown(
         f"""
 <table>
-<tr><th>Lead time</th><th>Model NSE</th><th>Model RMSE (m&sup3;/s)</th><th>PSS</th><th>Persistence NSE</th></tr>
+<tr><th>Variable</th><th>Selected model</th><th>d</th><th>AIC</th><th>Ljung-Box p</th></tr>
+{rows}
+</table>
+""",
+        unsafe_allow_html=True,
+    )
+
+# 4 ---------------------------------------------------------------------------
+st.markdown("## 4. Data")
+st.markdown(
+    f"""
+| Item | Detail |
+|------|--------|
+| **Basin** | {basin} |
+| **Variables** | Discharge (m&sup3;/s), rainfall (mm/month), stage (m) -- three independent series |
+| **Timestep** | Monthly (aggregated from daily USGS/CAMELS records) |
+| **Record** | Jan 1980 &ndash; Dec 2014 (420 months) |
+| **Training** | 1980&ndash;2003 (model identification & estimation) |
+| **Validation** | 2004&ndash;2014 (out-of-sample property-based assessment) |
+| **Source** | USGS NWIS (discharge, stage); CAMELS/Daymet basin-mean forcing (rainfall) |
+
+Discharge and stage come directly from USGS gauge 02371500; rainfall is the Daymet
+basin-mean product from the CAMELS archive for the same basin (the only one of the three
+rainfall products in that archive with zero missing days across the full record).
+"""
+)
+
+# 5 ---------------------------------------------------------------------------
+st.markdown("## 5. Stochastic, Property-Based Validation")
+st.markdown(
+    """
+Earlier versions of this project validated forecasts by comparing a single predicted
+value against the single observed value that followed -- the standard approach for a
+*deterministic* forecast. That approach does not fit a *stochastic* model: each run of a
+stochastic model produces a different random realisation, so comparing one realisation to
+the one sequence that actually happened conflates model skill with random chance. What
+should be reproducible is not the exact path but the **statistical properties** of the
+process -- its mean, variability, persistence, seasonality, and extremes -- which is what
+matters for applications like sizing a reservoir or a spillway.
+
+Validation here works as follows: each model, fitted on the training period, generates an
+**ensemble of independent synthetic sequences** spanning the validation period. Each
+sequence is characterised by seven summary statistics (mean, standard deviation, skewness,
+month-to-month persistence, seasonal amplitude, longest dry spell, and peak value), and the
+**actual historical validation-period record is checked against the ensemble's spread**:
+if the historical value for a property falls within the ensemble's 5th-95th percentile
+range, that property is judged reproduced.
+"""
+)
+if variables:
+    rows = "".join(
+        f"<tr><td>{v.capitalize()}</td>"
+        f"<td>{r['validation_n_within']} / {r['validation_n_total']}</td></tr>"
+        for v, r in variables.items()
+    )
+    st.markdown(
+        f"""
+<table>
+<tr><th>Variable</th><th>Properties within 90% synthetic envelope</th></tr>
 {rows}
 </table>
 """,
         unsafe_allow_html=True,
     )
 st.markdown(
-    f"""
-A **positive PSS at every lead time** shows the model adds genuine skill beyond persistence.
-At a one-day lead the model attains an NSE of **{nse1:.3f}** (&ldquo;very good&rdquo; on the
-Moriasi et al. (2007) scale) with a skill score of **{pss1:+.3f}**. Skill declines at longer
-leads, which is expected for any model that uses only past flow.
+    """
+This is a stricter, more honest test than it might look: a wide synthetic envelope that
+contains everything is not informative, so the envelope width itself (visible in the
+Forecast Tool) is part of what should be judged, not just whether the historical value
+happens to fall inside it.
 """
 )
 
@@ -213,14 +251,20 @@ st.markdown("## 6. How to Use the App")
 st.markdown(
     """
 1. Go to the **Forecast Tool** page.
-2. In the sidebar set the **Horizon (days)** (1&ndash;7) and the length of **history to display**.
+2. In the sidebar choose a **variable** (discharge, rainfall, or stage), a **forecast
+   origin** month, a **horizon**, and the number of **synthetic replicates**.
 3. Press **Run Forecast**.
 
-The app forecasts forward from the **end of the observed record**. Results show:
-- **Forecast Summary** &mdash; discharge for each day and its % difference from the record mean.
-- **Forecast Table** &mdash; dated forecast values (downloadable as CSV).
-- **Discharge Forecast Chart** &mdash; recent observed history with the forecast appended.
-- **Validation Skill** &mdash; the out-of-sample NSE and persistence skill score by lead time.
+Because the model is stochastic, each click of **Run Forecast** generates a fresh random
+ensemble -- the exact synthetic paths will differ between runs, and that is expected, not
+a bug. Results show:
+- **Forecast Summary** -- the ensemble median and 90% band for each month.
+- **Forecast Table** -- dated forecast values with the 5th/95th percentile band.
+- **Stochastic Forecast chart** -- recent observed history with the synthetic band
+  and median appended, and (where available) the actual observed values for context.
+- **Property-Based Validation** -- how many of the seven summary statistics the model
+  reproduces within its ensemble's 90% envelope, computed once over the full validation
+  period.
 """
 )
 
@@ -230,11 +274,11 @@ st.markdown(
     """
 | Limitation | Implication |
 |-----------|-------------|
-| **Univariate (discharge only)** | The model cannot anticipate a flood driven by rainfall that has not yet reached the river; it responds once the rise begins. |
+| **Univariate per variable** | Each model uses only its own past; discharge cannot anticipate a rainfall event that has not yet reached the river. |
+| **Non-seasonal ARIMA** | No explicit seasonal (P, D, Q, 12) terms; some residual autocorrelation at seasonal lags remains for discharge and stage (visible in the Ljung-Box result), an acknowledged limitation rather than a hidden one. |
 | **Linear model** | Catchment response during extreme events is partly non-linear and not fully captured. |
-| **Skill decays with lead time** | Most reliable at the 1-day horizon; weaker at 2&ndash;3 days. |
-| **Point forecasts only** | A single deterministic value is returned; no prediction intervals (a recommended extension). |
-| **Single basin, fixed parameters** | Demonstrated on one basin; transfer to very different regimes is untested. |
+| **Gaussian innovations** | The synthetic ensembles draw innovations from a Normal distribution fitted to the residuals; residual diagnostics show heavier tails than Normal for some variables, so extreme-tail synthetic values may be somewhat under-dispersed. |
+| **Single basin** | Demonstrated on one basin; transfer to a different climate regime is untested. |
 """
 )
 
@@ -242,24 +286,26 @@ st.markdown(
 st.markdown("## 8. Technical Details")
 st.markdown(
     """
-**Software stack:** Python, NumPy, SciPy, Matplotlib, Streamlit. The ARIMA estimation,
-stationarity tests, ACF/PACF, conditional-sum-of-squares optimisation and Ljung&ndash;Box
-test are implemented directly from their defining equations (self-contained, no external
+**Software stack:** Python, NumPy, SciPy, Pandas, Matplotlib, Streamlit. The ARIMA
+estimation, stationarity tests, ACF/PACF, conditional-sum-of-squares optimisation,
+parameter standard errors, and the Ljung&ndash;Box/ARCH/Jarque&ndash;Bera tests are
+implemented directly from their defining equations (self-contained, no external
 time-series library).
 
 ```
 finals_project/
 ├── app.py                 ← navigation entrypoint
 ├── pages/
-│   ├── 0_Forecast.py      ← forecast tool
+│   ├── 0_Forecast.py      ← forecast tool (stochastic, per-variable)
 │   └── 1_Documentation.py ← this page
 ├── src/
-│   ├── preprocess.py      ← load discharge, log transform, train/valid split
-│   ├── model.py           ← ARIMA + ADF/KPSS/ACF/PACF/Ljung-Box
+│   ├── preprocess.py      ← monthly loaders (discharge, rainfall, stage)
+│   ├── model.py           ← ARIMA + ADF/KPSS/ACF/PACF/Ljung-Box + standard errors
 │   ├── calibrate.py       ← stationarity + AIC order selection
-│   ├── forecast.py        ← rolling multi-step forecast + persistence
-│   └── metrics.py         ← NSE, RMSE, PBIAS, MAE, R2, skill score
-├── data/results.json      ← model + validation metrics
+│   ├── simulate.py        ← stochastic synthetic-ensemble generation
+│   ├── validation.py      ← property-based validation
+│   └── metrics.py         ← summary statistics
+├── data/results.json      ← per-variable model + validation results
 └── run_pipeline.py        ← full pipeline runner
 ```
 
@@ -277,7 +323,8 @@ st.markdown(
     """
 - Addor, N., Newman, A. J., Mizukami, N., & Clark, M. P. (2017). The CAMELS data set.
   *HESS*, 21(10), 5293&ndash;5313.
-- Box, G. E. P., & Jenkins, G. M. (1976). *Time series analysis: Forecasting and control*. Holden-Day.
+- Box, G. E. P., Jenkins, G. M., & Reinsel, G. C. (2008). *Time series analysis:
+  Forecasting and control* (4th ed.). Wiley.
 - Hipel, K. W., & McLeod, A. I. (1994). *Time series modelling of water resources and
   environmental systems*. Elsevier.
 - Moriasi, D. N., et al. (2007). Model evaluation guidelines. *Transactions of the ASABE*, 50(3), 885&ndash;900.
@@ -292,8 +339,8 @@ st.markdown(
 
 st.markdown("---")
 st.caption(
-    "Conecuh River Streamflow Forecaster  ·  "
+    "Conecuh River Stochastic Forecaster  ·  "
     "Computer Hydrological Forecasting — Final Year Project  ·  "
-    "Department of Civil and Environmental Engineering, University of Lagos  ·  "
-    "Supervisor: Prof. K. O. Aiyesimoju  ·  February 2026"
+    "Ugbodaga Benedict Osikpemi  ·  "
+    "Supervisor: Prof. K. O. Aiyesimoju  ·  2026"
 )

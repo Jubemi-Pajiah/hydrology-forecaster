@@ -2,9 +2,9 @@
 preprocess.py — Load observed daily discharge for the Conecuh River, Alabama.
 
 Data source: CAMELS US dataset (Newman et al., 2015; Addor et al., 2017),
-USGS gauge 02361000, contained in
+USGS gauge 02371500 (Conecuh River at Brantley, AL), contained in
     basin_timeseries_v1p2_metForcing_obsFlow.zip
-    -> basin_dataset_public_v1p2/usgs_streamflow/03/02361000_streamflow_qc.txt
+    -> basin_dataset_public_v1p2/usgs_streamflow/03/02371500_streamflow_qc.txt
 
 This project forecasts streamflow from its OWN past values (a univariate
 statistical time-series approach). No rainfall, temperature, or potential
@@ -35,16 +35,20 @@ DATA_DIR.mkdir(exist_ok=True)
 # CAMELS archive and the path of the Conecuh streamflow file inside it
 CAMELS_ZIP = PROJECT_ROOT / "basin_timeseries_v1p2_metForcing_obsFlow.zip"
 STREAMFLOW_MEMBER = (
-    "basin_dataset_public_v1p2/usgs_streamflow/03/02361000_streamflow_qc.txt"
+    "basin_dataset_public_v1p2/usgs_streamflow/03/02371500_streamflow_qc.txt"
 )
 # A cached extracted copy so the pipeline runs without the 3.4 GB archive
 CACHED_CSV = DATA_DIR / "conecuh_discharge.csv"
 
-# Basin / gauge metadata (Conecuh River near Brewton / at gauge 02361000)
-GAUGE_ID = "02361000"
-BASIN_NAME = "Conecuh River, Alabama, USA"
-BASIN_LATITUDE_DEG = 31.10        # approx. gauge latitude
-BASIN_AREA_KM2 = 3604.0           # approx. drainage area (km2)
+# Basin / gauge metadata (Conecuh River at Brantley, AL, gauge 02371500).
+# Verified directly against USGS NWIS (station_nm "CONECUH RIVER AT BRANTLEY
+# AL") and the CAMELS basin list (camels_name.txt, HUC region 03) on
+# 2026-08-12, after discovering that the gauge previously used here,
+# 02361000, is actually the Choctawhatchee River, not the Conecuh.
+GAUGE_ID = "02371500"
+BASIN_NAME = "Conecuh River at Brantley, Alabama, USA"
+BASIN_LATITUDE_DEG = 31.80        # gauge latitude (CAMELS forcing file header)
+BASIN_AREA_KM2 = 1294.4           # drainage area (CAMELS forcing file header)
 
 # Unit conversion: cubic feet per second -> cubic metres per second
 CFS_TO_M3S = 0.0283168
@@ -137,6 +141,111 @@ def split_dataset(df: pd.DataFrame):
     """Split into training (1980-2003) and validation (2004-2014) periods."""
     train = df.loc[:TRAIN_END].copy()
     valid = df.loc[VALID_START:].copy()
+    return train, valid
+
+
+# ----------------------------------------------------------------------------
+# Monthly, multi-variable loading (discharge, rainfall, stage)
+#
+# Added 2026-08-12 per supervisor instruction: monthly timestep instead of
+# daily, and three independent univariate series instead of discharge-only.
+# All three are drawn from the same USGS 02371500 / CAMELS 02371500 basin.
+# ----------------------------------------------------------------------------
+RAINFALL_CSV = DATA_DIR / "conecuh_rainfall.csv"
+STAGE_CSV = DATA_DIR / "conecuh_gage_height_raw.csv"
+
+# Daymet is the primary rainfall product: it covers the full 1980-2014 record
+# with zero missing days. Maurer and NLDAS are cached alongside it for
+# cross-checking (Maurer truncates at 2008 -- a known CAMELS limitation --
+# so it cannot serve as the primary series here).
+RAINFALL_PRODUCT = "daymet"
+
+
+def load_rainfall_daily() -> pd.Series:
+    """Daily basin-mean rainfall (mm/day), Daymet product, 1980-2014."""
+    df = pd.read_csv(RAINFALL_CSV, parse_dates=["date"]).set_index("date")
+    return df[RAINFALL_PRODUCT].rename("value")
+
+
+def load_stage_daily() -> pd.Series:
+    """Daily gage height (m), USGS gauge 02371500, 1980-2014."""
+    df = pd.read_csv(STAGE_CSV, parse_dates=["date"]).set_index("date")
+    return df["gage_height_m"].rename("value")
+
+
+def load_discharge_daily() -> pd.Series:
+    """Daily discharge (m3/s), USGS gauge 02371500, 1980-2014."""
+    return load_discharge()["flow"].rename("value")
+
+
+# variable name -> (daily loader, monthly aggregation rule)
+# discharge and stage are averaged over the month; rainfall is summed (a
+# monthly total, not a monthly mean daily rate).
+VARIABLE_LOADERS = {
+    "discharge": (load_discharge_daily, "mean"),
+    "rainfall": (load_rainfall_daily, "sum"),
+    "stage": (load_stage_daily, "mean"),
+}
+
+MONTHLY_START = "1980-01-01"
+MONTHLY_END = "2014-12-31"
+TRAIN_END_MONTH = "2003-12-01"
+VALID_START_MONTH = "2004-01-01"
+
+
+def monthly_aggregate(daily: pd.Series, how: str = "mean", min_frac: float = 0.5) -> pd.Series:
+    """
+    Aggregate a daily series to monthly (month-start index).
+
+    A month is set to NaN -- and later filled by time interpolation across
+    the (small number of) neighbouring months -- if fewer than min_frac of
+    its days actually have data, rather than silently averaging/summing over
+    a mostly-missing month.
+    """
+    full_idx = pd.date_range(MONTHLY_START, MONTHLY_END, freq="D")
+    s = daily.reindex(full_idx)
+    counts = s.notna().resample("MS").sum()
+    sizes = s.resample("MS").size()
+    agg = s.resample("MS").sum() if how == "sum" else s.resample("MS").mean()
+    frac = counts / sizes
+    n_missing = int((frac < min_frac).sum())
+    agg = agg.where(frac >= min_frac)
+    agg = agg.interpolate(method="time", limit_direction="both")
+    agg.attrs["n_fully_missing_months"] = n_missing
+    return agg
+
+
+def build_monthly_dataset(variable: str) -> pd.DataFrame:
+    """
+    Monthly analysis-ready series for one of 'discharge', 'rainfall', 'stage'.
+
+    Returns a DataFrame indexed by month-start date with columns:
+        value     : monthly mean (discharge m3/s, stage m) or monthly total
+                    (rainfall mm)
+        log_value : natural-log transform. All three series are strictly
+                    positive at monthly resolution for this basin -- checked
+                    during data acquisition (2026-08-12), not assumed.
+    The count of months that needed interpolation is stashed in
+    df.attrs["n_fully_missing_months"] for reporting in the methodology.
+    """
+    if variable not in VARIABLE_LOADERS:
+        raise ValueError(f"Unknown variable {variable!r}; choose from {list(VARIABLE_LOADERS)}")
+    loader, how = VARIABLE_LOADERS[variable]
+    daily = loader()
+    monthly = monthly_aggregate(daily, how=how)
+    df = monthly.to_frame("value")
+    df.index.name = "date"
+    df["log_value"] = log_transform(df["value"].to_numpy())
+    df.attrs["n_fully_missing_months"] = monthly.attrs.get("n_fully_missing_months", 0)
+    df.attrs["variable"] = variable
+    return df
+
+
+def split_monthly(df: pd.DataFrame):
+    """Split a monthly dataset into training (1980-2003) and validation
+    (2004-2014) periods -- the same calendar split as the daily pipeline."""
+    train = df.loc[:TRAIN_END_MONTH].copy()
+    valid = df.loc[VALID_START_MONTH:].copy()
     return train, valid
 
 

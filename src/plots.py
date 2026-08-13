@@ -1,26 +1,32 @@
 """
-plots.py — Figures for the statistical streamflow-forecasting study.
+plots.py — Figures for the statistical hydrological-forecasting study.
 
-All figures are derived from observed discharge and the fitted ARIMA model;
-none depends on rainfall or meteorological forcing. Figures are written to
+Rewritten 2026-08-12 for the monthly, three-variable (discharge, rainfall,
+stage), stochastic-validation pipeline (see run_pipeline.py). All figures are
+derived from the observed monthly series and the three independently fitted
+ARIMA models; none depends on cross-variable input. Figures are written to
 figures/ at 300 DPI.
 
-  Fig 1 : Observed discharge time series with train/validation split
-  Fig 2 : ACF and PACF of differenced log-discharge (model identification)
-  Fig 3 : Observed vs 1-day-ahead forecast hydrograph (validation window)
-  Fig 4 : Observed vs predicted scatter (1-day, validation)
-  Fig 5 : Residual diagnostics (series, histogram, ACF)
-  Fig 6 : Forecast skill vs lead time (NSE and persistence skill score)
+  Fig 1 : Monthly time series, all three variables, train/validation split
+  Fig 2 : ACF and PACF of each variable's (differenced) training series
+  Fig 3 : Stochastic ensemble vs the historical validation record
+  Fig 4 : Property-based validation -- historical value vs. synthetic
+          ensemble envelope, normalised to the ensemble median
+  Fig 5 : Residual diagnostics (histogram and ACF) per variable
+  Fig 6 : Estimated AR/MA coefficients with 95% confidence intervals
+          ("how do you estimate the parameters" -- shown, not just claimed)
 """
 
 from pathlib import Path
 
 import numpy as np
+from scipy import stats as _stats
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from .model import acf, pacf, conf_interval
+from .validation import PROPERTY_KEYS
 
 FIG_DIR = Path(__file__).resolve().parent.parent / "figures"
 FIG_DIR.mkdir(exist_ok=True)
@@ -28,7 +34,7 @@ FIG_DIR.mkdir(exist_ok=True)
 plt.rcParams.update({
     "figure.dpi": 110,
     "savefig.dpi": 300,
-    "font.size": 11,
+    "font.size": 10.5,
     "axes.grid": True,
     "grid.alpha": 0.3,
 })
@@ -36,138 +42,192 @@ plt.rcParams.update({
 _BLUE = "#1f77b4"
 _RED = "#d62728"
 _GREEN = "#2ca02c"
+_GRAY = "#7f7f7f"
+_ORANGE = "#ff7f0e"
+
+VARIABLE_LABELS = {
+    "discharge": "Discharge (m$^3$/s)",
+    "rainfall": "Rainfall (mm/month)",
+    "stage": "Stage (m)",
+}
+VARIABLES_ORDER = ["discharge", "rainfall", "stage"]
 
 
-def fig1_discharge_series(df, train_end, path=FIG_DIR / "Fig1_DischargeTimeSeries.png"):
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 6.5), sharex=True)
-    ax1.plot(df.index, df["flow"], color=_BLUE, lw=0.5)
-    ax1.axvline(train_end, color=_RED, ls="--", lw=1.2)
-    ax1.set_ylabel("Discharge (m$^3$/s)")
-    ax1.set_title("Conecuh River daily discharge, USGS 02361000 (1980-2014)")
-    ax1.text(df.index[len(df)//6], df["flow"].max()*0.9, "Training\n1980-2003",
-             color=_RED, fontsize=9)
-    ax1.text(df.index[int(len(df)*0.82)], df["flow"].max()*0.9, "Validation\n2004-2014",
-             color=_RED, fontsize=9)
-
-    ax2.plot(df.index, df["log_flow"], color=_GREEN, lw=0.5)
-    ax2.axvline(train_end, color=_RED, ls="--", lw=1.2)
-    ax2.set_ylabel("ln Discharge")
-    ax2.set_xlabel("Year")
-    ax2.set_title("Log-transformed discharge (variance-stabilised)")
+def fig1_monthly_series(artifacts, path=FIG_DIR / "Fig1_DischargeTimeSeries.png"):
+    """Monthly series for all three variables, train/validation split marked."""
+    fig, axes = plt.subplots(3, 1, figsize=(11, 8.5), sharex=True)
+    for ax, v in zip(axes, VARIABLES_ORDER):
+        df = artifacts[v]["df"]
+        train_end = artifacts[v]["train"].index[-1]
+        ax.plot(df.index, df["value"], color=_BLUE, lw=0.9)
+        ax.axvline(train_end, color=_RED, ls="--", lw=1.1)
+        ax.set_ylabel(VARIABLE_LABELS[v])
+        ax.set_title(f"{v.capitalize()}, monthly, USGS 02371500 (1980-2014)", fontsize=10.5)
+    axes[0].text(0.02, 0.92, "Training 1980-2003", transform=axes[0].transAxes,
+                 color=_RED, fontsize=9)
+    axes[0].text(0.75, 0.92, "Validation 2004-2014", transform=axes[0].transAxes,
+                 color=_RED, fontsize=9)
+    axes[-1].set_xlabel("Year")
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
     return path
 
 
-def fig2_acf_pacf(diff_series, nlags=40, path=FIG_DIR / "Fig2_ACF_PACF.png"):
-    a = acf(diff_series, nlags)
-    p = pacf(diff_series, nlags)
-    ci = conf_interval(len(diff_series))
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
-    lags = np.arange(nlags + 1)
-    ax1.bar(lags, a, width=0.3, color=_BLUE)
-    ax1.axhline(0, color="k", lw=0.8)
-    ax1.axhline(ci, color=_RED, ls="--", lw=1)
-    ax1.axhline(-ci, color=_RED, ls="--", lw=1)
-    ax1.set_title("ACF of differenced log-discharge")
-    ax1.set_xlabel("Lag (days)"); ax1.set_ylabel("Autocorrelation")
+def fig2_acf_pacf(artifacts, nlags=24, path=FIG_DIR / "Fig2_ACF_PACF.png"):
+    """ACF/PACF of each variable's (differenced) training series -- model
+    identification evidence, one row per variable."""
+    fig, axes = plt.subplots(3, 2, figsize=(11, 9.5))
+    for row, v in enumerate(VARIABLES_ORDER):
+        w = artifacts[v]["w_train"]
+        a = acf(w, nlags)
+        p = pacf(w, nlags)
+        ci = conf_interval(len(w))
+        lags = np.arange(nlags + 1)
 
-    ax2.bar(lags, p, width=0.3, color=_GREEN)
-    ax2.axhline(0, color="k", lw=0.8)
-    ax2.axhline(ci, color=_RED, ls="--", lw=1)
-    ax2.axhline(-ci, color=_RED, ls="--", lw=1)
-    ax2.set_title("PACF of differenced log-discharge")
-    ax2.set_xlabel("Lag (days)"); ax2.set_ylabel("Partial autocorrelation")
+        ax1, ax2 = axes[row]
+        ax1.bar(lags, a, width=0.3, color=_BLUE)
+        ax1.axhline(0, color="k", lw=0.8)
+        ax1.axhline(ci, color=_RED, ls="--", lw=1)
+        ax1.axhline(-ci, color=_RED, ls="--", lw=1)
+        ax1.set_title(f"{v.capitalize()}: ACF (d={artifacts[v]['d']})", fontsize=10)
+        ax1.set_xlabel("Lag (months)"); ax1.set_ylabel("ACF")
+
+        ax2.bar(lags, p, width=0.3, color=_GREEN)
+        ax2.axhline(0, color="k", lw=0.8)
+        ax2.axhline(ci, color=_RED, ls="--", lw=1)
+        ax2.axhline(-ci, color=_RED, ls="--", lw=1)
+        ax2.set_title(f"{v.capitalize()}: PACF", fontsize=10)
+        ax2.set_xlabel("Lag (months)"); ax2.set_ylabel("PACF")
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
     return path
 
 
-def fig3_forecast_hydrograph(dates, q_obs, q_pred, q_persist=None,
-                             path=FIG_DIR / "Fig3_ForecastHydrograph.png"):
-    fig, ax = plt.subplots(figsize=(11, 4.8))
-    ax.plot(dates, q_obs, color="k", lw=1.1, label="Observed")
-    ax.plot(dates, q_pred, color=_RED, lw=1.0, ls="--", label="ARIMA 1-day forecast")
-    if q_persist is not None:
-        ax.plot(dates, q_persist, color="gray", lw=0.7, alpha=0.6, label="Persistence")
-    ax.set_ylabel("Discharge (m$^3$/s)")
-    ax.set_xlabel("Date")
-    ax.set_title("Observed vs 1-day-ahead forecast (validation sample)")
-    ax.legend()
+def fig3_ensemble_vs_historical(artifacts, path=FIG_DIR / "Fig3_ForecastHydrograph.png"):
+    """Stochastic ensemble spread (5th-95th percentile band + median) against
+    the actual historical validation-period record, per variable."""
+    fig, axes = plt.subplots(3, 1, figsize=(11, 8.5), sharex=False)
+    for ax, v in zip(axes, VARIABLES_ORDER):
+        valid = artifacts[v]["valid"]
+        ens = artifacts[v]["ens_valid"]
+        dates = valid.index
+        lo, hi = np.percentile(ens, [5, 95], axis=0)
+        med = np.median(ens, axis=0)
+        ax.fill_between(dates, lo, hi, color=_BLUE, alpha=0.25, label="Synthetic 5th-95th pct")
+        ax.plot(dates, med, color=_BLUE, lw=1.0, ls="--", label="Synthetic median")
+        ax.plot(dates, valid["value"], color="k", lw=1.1, label="Observed")
+        ax.set_ylabel(VARIABLE_LABELS[v])
+        ax.set_title(f"{v.capitalize()}: synthetic ensemble vs. observed, validation period",
+                     fontsize=10.5)
+        if v == "discharge":
+            ax.legend(fontsize=8, loc="upper right")
+    axes[-1].set_xlabel("Year")
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
     return path
 
 
-def fig4_scatter(q_obs, q_pred, lead=1, path=FIG_DIR / "Fig4_Scatter.png"):
-    fig, ax = plt.subplots(figsize=(5.6, 5.6))
-    ax.scatter(q_obs, q_pred, s=6, alpha=0.3, color=_BLUE)
-    lim = max(q_obs.max(), q_pred.max())
-    ax.plot([0, lim], [0, lim], color=_RED, ls="--", lw=1.2, label="1:1 line")
-    ax.set_xlabel("Observed discharge (m$^3$/s)")
-    ax.set_ylabel("Forecast discharge (m$^3$/s)")
-    ax.set_title(f"Observed vs {lead}-day forecast (validation)")
-    ax.legend()
-    ax.set_aspect("equal", adjustable="box")
+def fig4_property_validation(artifacts, path=FIG_DIR / "Fig4_Scatter.png"):
+    """Property-based validation: historical value vs. synthetic ensemble
+    envelope, normalised to the ensemble median so every property (different
+    units, different scales) sits on one comparable axis. A point on the
+    dashed vertical line at 1.0 means the historical statistic equals the
+    ensemble median exactly; inside the shaded band means it falls within the
+    ensemble's 90% spread."""
+    fig, axes = plt.subplots(1, 3, figsize=(14, 5), sharex=True)
+    keys = [k for k in PROPERTY_KEYS if k != "seasonal_means"]
+    for ax, v in zip(axes, VARIABLES_ORDER):
+        summary = artifacts[v]["val_summary"]
+        ys = np.arange(len(keys))
+        for y, key in zip(ys, keys):
+            s = summary.get(key)
+            if s is None:
+                continue
+            med = s["ensemble_median"] if s["ensemble_median"] != 0 else 1e-9
+            lo_r, hi_r = s["ensemble_p5"] / med, s["ensemble_p95"] / med
+            hist_r = s["historical"] / med
+            color = _GREEN if s["within_90pct_envelope"] else _RED
+            ax.plot([lo_r, hi_r], [y, y], color=_GRAY, lw=4, alpha=0.4, solid_capstyle="round")
+            ax.scatter([hist_r], [y], color=color, s=45, zorder=5)
+        ax.axvline(1.0, color="k", ls="--", lw=0.8)
+        ax.set_yticks(ys)
+        ax.set_yticklabels([k.replace("_", " ") for k in keys], fontsize=8.5)
+        ax.set_xlabel("Historical / ensemble median")
+        ax.set_title(v.capitalize(), fontsize=11)
+    fig.suptitle("Property-based validation: historical statistic vs. synthetic ensemble "
+                  "(green = within 90% envelope, red = outside)", fontsize=10)
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.savefig(path)
+    plt.close(fig)
+    return path
+
+
+def fig5_residual_diagnostics(artifacts, path=FIG_DIR / "Fig5_ResidualDiagnostics.png"):
+    """Residual histogram and ACF per variable."""
+    fig, axes = plt.subplots(3, 2, figsize=(11, 9.5))
+    for row, v in enumerate(VARIABLES_ORDER):
+        resid = artifacts[v]["model"].resid_
+        ax1, ax2 = axes[row]
+
+        ax1.hist(resid, bins=40, density=True, color=_GREEN, alpha=0.7)
+        xs = np.linspace(resid.min(), resid.max(), 200)
+        mu, sd = resid.mean(), resid.std()
+        ax1.plot(xs, np.exp(-0.5 * ((xs - mu) / sd) ** 2) / (sd * np.sqrt(2 * np.pi)),
+                  color=_RED, lw=1.5, label="Normal")
+        ax1.set_title(f"{v.capitalize()}: residual distribution", fontsize=10)
+        ax1.set_xlabel("Residual"); ax1.legend(fontsize=8)
+
+        nlags = 24
+        a = acf(resid, nlags); ci = conf_interval(len(resid))
+        lags = np.arange(nlags + 1)
+        ax2.bar(lags, a, width=0.3, color=_BLUE)
+        ax2.axhline(ci, color=_RED, ls="--", lw=1)
+        ax2.axhline(-ci, color=_RED, ls="--", lw=1)
+        ax2.axhline(0, color="k", lw=0.8)
+        ax2.set_title(f"{v.capitalize()}: residual ACF", fontsize=10)
+        ax2.set_xlabel("Lag (months)")
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
     return path
 
 
-def fig5_residual_diagnostics(resid, path=FIG_DIR / "Fig5_ResidualDiagnostics.png"):
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4))
-    axes[0].plot(resid, color=_BLUE, lw=0.4)
-    axes[0].axhline(0, color="k", lw=0.8)
-    axes[0].set_title("Residual series")
-    axes[0].set_xlabel("Observation"); axes[0].set_ylabel("Residual")
-
-    axes[1].hist(resid, bins=60, density=True, color=_GREEN, alpha=0.7)
-    xs = np.linspace(resid.min(), resid.max(), 200)
-    mu, sd = resid.mean(), resid.std()
-    axes[1].plot(xs, np.exp(-0.5*((xs-mu)/sd)**2)/(sd*np.sqrt(2*np.pi)),
-                 color=_RED, lw=1.5, label="Normal")
-    axes[1].set_title("Residual distribution")
-    axes[1].set_xlabel("Residual"); axes[1].legend()
-
-    nlags = 30
-    a = acf(resid, nlags); ci = conf_interval(len(resid))
-    lags = np.arange(nlags + 1)
-    axes[2].bar(lags, a, width=0.3, color=_BLUE)
-    axes[2].axhline(ci, color=_RED, ls="--", lw=1)
-    axes[2].axhline(-ci, color=_RED, ls="--", lw=1)
-    axes[2].axhline(0, color="k", lw=0.8)
-    axes[2].set_title("Residual ACF")
-    axes[2].set_xlabel("Lag (days)")
-    fig.tight_layout()
-    fig.savefig(path)
-    plt.close(fig)
-    return path
-
-
-def fig6_skill_vs_lead(results, path=FIG_DIR / "Fig6_SkillVsLead.png"):
-    leads = sorted(results.keys())
-    nse_model = [results[k]["model"]["NSE"] for k in leads]
-    nse_persist = [results[k]["persistence"]["NSE"] for k in leads]
-    pss = [results[k]["model"]["PSS"] for k in leads]
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.5))
-    x = np.arange(len(leads)); w = 0.35
-    ax1.bar(x - w/2, nse_model, w, color=_BLUE, label="ARIMA")
-    ax1.bar(x + w/2, nse_persist, w, color="gray", label="Persistence")
-    ax1.set_xticks(x); ax1.set_xticklabels([f"{k}-day" for k in leads])
-    ax1.set_ylabel("NSE"); ax1.set_title("Forecast NSE by lead time")
-    ax1.legend()
-
-    ax2.bar(x, pss, 0.5, color=_GREEN)
-    ax2.axhline(0, color="k", lw=0.8)
-    ax2.set_xticks(x); ax2.set_xticklabels([f"{k}-day" for k in leads])
-    ax2.set_ylabel("Persistence skill score")
-    ax2.set_title("Skill beyond persistence")
-    fig.tight_layout()
+def fig6_parameter_estimates(artifacts, path=FIG_DIR / "Fig6_SkillVsLead.png"):
+    """AR/MA coefficient point estimates with 95% confidence intervals, one
+    panel per variable -- the direct answer to "how do you estimate the
+    parameters"."""
+    z = _stats.norm.ppf(0.975)
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.8))
+    for ax, v in zip(axes, VARIABLES_ORDER):
+        model = artifacts[v]["model"]
+        se = model.standard_errors()
+        labels, vals, errs = [], [], []
+        for i, ph in enumerate(model.phi):
+            labels.append(f"$\\phi_{{{i+1}}}$")
+            vals.append(ph)
+            e = se["phi"][i]
+            errs.append(z * e if e is not None and np.isfinite(e) else 0.0)
+        for i, th in enumerate(model.theta):
+            labels.append(f"$\\theta_{{{i+1}}}$")
+            vals.append(th)
+            e = se["theta"][i]
+            errs.append(z * e if e is not None and np.isfinite(e) else 0.0)
+        ys = np.arange(len(labels))
+        for val, err, y in zip(vals, errs, ys):
+            color = _BLUE if abs(val) > err else _GRAY
+            ax.errorbar([val], [y], xerr=[err], fmt="o", color="k", ecolor=color,
+                        elinewidth=2.5, capsize=4, markersize=5)
+        ax.axvline(0, color="k", lw=0.8, ls=":")
+        ax.set_yticks(ys); ax.set_yticklabels(labels, fontsize=11)
+        ax.set_xlabel("Coefficient value")
+        ax.set_title(f"{v.capitalize()}: ARIMA{model.order}", fontsize=11)
+        ax.invert_yaxis()
+    fig.suptitle("Estimated AR/MA coefficients, 95% confidence intervals "
+                  "(blue = excludes zero)", fontsize=10)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
     fig.savefig(path)
     plt.close(fig)
     return path

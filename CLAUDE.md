@@ -3,11 +3,23 @@
 Guidance for Claude Code (and humans) working in this repository.
 
 ## What this project is
-B.Sc. final-year project: **short-term (1–3 day) river-discharge forecasting** for the
-**Conecuh River, Alabama (USGS gauge 02361000, CAMELS dataset)** using a **purely
-statistical, discharge-only ARIMA (Box–Jenkins) model**. It forecasts discharge from its
-own past values — **no rainfall, temperature, evapotranspiration, or unit-hydrograph
-routing**. Author: Ugbodaga Benedict Osikpemi. Supervisor: Prof. K. O. Aiyesimoju.
+B.Sc. final-year project: statistical river-flow forecasting for the **Conecuh River at
+Brantley, Alabama (USGS gauge 02371500, CAMELS dataset)** using a **purely statistical
+ARIMA (Box–Jenkins) model**. Author: Ugbodaga Benedict Osikpemi. Supervisor: Prof. K. O.
+Aiyesimoju.
+
+> **2026-08-12 correction:** this project previously used USGS gauge **02361000**,
+> believing it was the Conecuh River. It is not — NWIS confirms 02361000 is the
+> Choctawhatchee River near Newton, AL. The real Conecuh River gauge is **02371500**
+> (Conecuh River at Brantley, AL), also a CAMELS basin, with a longer and cleaner record
+> (discharge 1937–present, stage 1973–present). All data has been re-pulled for this
+> gauge; see `data/conecuh_discharge.csv`, `data/conecuh_rainfall.csv`,
+> `data/conecuh_gage_height_raw.csv`. A second pivot (in progress, not yet reflected
+> below) is also underway: monthly instead of daily timestep, three independent
+> univariate ARIMA models (discharge, rainfall, stage) instead of discharge-only, and
+> stochastic/property-based validation instead of point-forecast comparison, per
+> supervisor instruction. The description below still describes the pre-pivot
+> discharge-only daily model until that work lands.
 
 > History: an earlier rainfall-runoff (two-bucket) version targeting the Ogun-Osun basin
 > in Nigeria was **replaced** on supervisor instruction. Do not reintroduce rainfall,
