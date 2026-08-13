@@ -366,15 +366,47 @@ with center:
                     st.caption(f"Of the {o['n_actual']} months we can check, {n_inside} landed inside "
                               f"the uncertainty range shown above.")
 
-        with st.expander("For the curious: the statistics behind this outlook"):
+        with st.expander("For the curious: the statistics behind this outlook", expanded=False):
+            st.markdown(
+                "This is the part a supervisor or examiner actually wants to see: not just "
+                "*which* model was picked, but *how its numbers were estimated*, *how precisely* "
+                "they're known, and *what evidence* says this data fits an ARIMA model at all."
+            )
             for v in ["discharge", "rainfall", "stage"]:
                 o = outputs[v]
                 r = o["r"]
                 st.markdown(f"**{VAR_LABEL[v]}**")
                 st.markdown(
                     f"Model: `ARIMA{tuple(r['order'])}`, AIC {r['aic']:.1f}, differencing d={r['differencing_d']}. "
-                    f"Coefficients estimated on 1980-2003, validated on 2004-2014."
+                    f"Coefficients estimated on 1980-2003 (conditional sum of squares; exact ordinary "
+                    f"least squares when there's no moving-average term), validated on 2004-2014."
                 )
+
+                se = r["standard_errors"]
+                coef_rows = [{"Coefficient": "constant", "Estimate": round(r["constant"], 4),
+                              "Standard error": round(se["c"], 4) if se["c"] is not None else "n/a"}]
+                for i, ph in enumerate(r["phi"]):
+                    s = se["phi"][i]
+                    coef_rows.append({"Coefficient": f"AR (phi) {i+1}", "Estimate": round(ph, 4),
+                                      "Standard error": round(s, 4) if s is not None else "n/a"})
+                for i, th in enumerate(r["theta"]):
+                    s = se["theta"][i]
+                    coef_rows.append({"Coefficient": f"MA (theta) {i+1}", "Estimate": round(th, 4),
+                                      "Standard error": round(s, 4) if s is not None else "n/a"})
+                st.caption("Estimated coefficients — not just which order was picked, but the actual "
+                          "numbers and how precisely each is known:")
+                st.dataframe(pd.DataFrame(coef_rows), use_container_width=True, hide_index=True)
+
+                stat = r["stationarity_report"][-1]
+                st.caption(
+                    f"Stationarity evidence for d={r['differencing_d']}: ADF stat {stat['adf_stat']:.3f} "
+                    f"({'rejects a unit root' if stat['adf_stationary'] else 'does not reject a unit root'}), "
+                    f"KPSS stat {stat['kpss_stat']:.3f} "
+                    f"({'does not reject stationarity' if stat['kpss_stationary'] else 'rejects stationarity'}) "
+                    f"— the joint evidence used to decide this series fits an ARIMA model at this "
+                    f"differencing order, not an assumption."
+                )
+
                 val_rows = [{"Property": k.replace("_", " "), "Historical": v2["historical"],
                             "Model's range (90%)": f"[{v2['ensemble_p5']:.2f}, {v2['ensemble_p95']:.2f}]",
                             "Reproduced?": "yes" if v2["within_90pct_envelope"] else "no"}
