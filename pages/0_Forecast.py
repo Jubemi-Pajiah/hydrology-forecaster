@@ -120,17 +120,7 @@ def track_record_word(n_ok, n_total):
     return "Weak track record", RED
 
 
-def fmt_span(months):
-    """'192 months' reads badly for a 16-year horizon; show years once it's
-    long enough for that to be the natural unit."""
-    if months >= 24 and months % 12 == 0:
-        return f"{months // 12} years"
-    if months >= 24:
-        return f"{months / 12:.1f} years"
-    return f"{months} months"
-
-
-def build_narrative(variable, unit, horizon_months, origin_label, avg_val,
+def build_narrative(variable, unit, from_label, to_label, avg_val,
                     hist_mean, trend_word, level_word, n_ok, n_total):
     """Fill-in-the-blanks narrative. Uses <strong> (not Markdown **bold**)
     because it is always injected into a raw HTML block, where Markdown
@@ -139,12 +129,12 @@ def build_narrative(variable, unit, horizon_months, origin_label, avg_val,
     confidence = "a solid" if n_ok >= 6 else ("a reasonable" if n_ok >= 4 else "a rough")
     return (
         f"We are forecasting <strong>{var_label}</strong> for the <strong>{BASIN_SHORT}</strong> "
-        f"over the next <strong>{fmt_span(horizon_months)}</strong>, starting "
-        f"<strong>{origin_label}</strong>. Based on the result, we see {var_label} "
-        f"<strong>{trend_word}</strong>, averaging about <strong>{avg_val:.1f} {unit}</strong> "
-        f"&mdash; {level_word} the typical level of {hist_mean:.1f} {unit}. Our model's outlook "
-        f"has matched real historical patterns in <strong>{n_ok} of {n_total}</strong> key ways, "
-        f"so treat this as {confidence} guide, not a guarantee."
+        f"from <strong>{from_label}</strong> to <strong>{to_label}</strong>. Based on the "
+        f"result, we see {var_label} <strong>{trend_word}</strong>, averaging about "
+        f"<strong>{avg_val:.1f} {unit}</strong> &mdash; {level_word} the typical level of "
+        f"{hist_mean:.1f} {unit}. Our model's outlook has matched real historical patterns "
+        f"in <strong>{n_ok} of {n_total}</strong> key ways, so treat this as {confidence} "
+        f"guide, not a guarantee."
     )
 
 
@@ -201,7 +191,6 @@ results = load_results()
 full_df = {v: load_monthly(v) for v in ["discharge", "rainfall", "stage"]}
 last_month = full_df["discharge"].index[-1]
 first_month = full_df["discharge"].index[0]
-month_options = list(full_df["discharge"].index)
 
 # ── Header (full width) ──────────────────────────────────────────────────────
 st.title("River Outlook")
@@ -229,101 +218,123 @@ with left:
         <div class="rail-fact"><span>Years of history</span><b>35</b></div>
         <div class="rail-fact"><span>Variables modelled</span><b>3, independently</b></div>
         <div class="rail-fact"><span>Method</span><b>ARIMA (Box&ndash;Jenkins)</b></div>
-        <p style="margin-top:0.6rem;">The starting point has to be a month we've actually
-        measured, so the model has real history to build from &mdash; that's why it can't
-        start in 2018 or today. But it can project <em>forward</em> from that point to
-        any year you type in &mdash; 2030, 2050, 2100, no ceiling. The further out you
-        go, the wider the plausible range gets &mdash; that's the model being honest
-        about how much less certain a 50-year-out guess is than a 1-year one, not a
-        flaw.</p>
+        <p style="margin-top:0.6rem;">Pick any future window you actually want &mdash;
+        2030 to 2035, 2050 to 2060, whatever. The model builds forward internally from
+        the last real measurement to get there; that's just plumbing, not something you
+        need to think about. The further out the window, the wider the plausible range
+        gets &mdash; that's the model being honest about how much less certain a
+        50-year-out guess is than a 1-year one, not a flaw.</p>
         </div>""",
         unsafe_allow_html=True,
     )
     st.page_link("pages/1_Documentation.py", label="How the method works, in full")
 
 # ── CENTER: controls, then chart + story ─────────────────────────────────────
+MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
+              "August", "September", "October", "November", "December"]
+PRESETS = {
+    "2025 – 2030": (2025, "January", 2030, "January"),
+    "2030 – 2035": (2030, "January", 2035, "January"),
+    "2035 – 2045": (2035, "January", 2045, "January"),
+    "2045 – 2065": (2045, "January", 2065, "January"),
+}
+MIN_YEAR = last_month.year + 1  # the record ends 2014-12; every predictable month is after that
+
+st.session_state.setdefault("from_year", 2030)
+st.session_state.setdefault("from_month", "January")
+st.session_state.setdefault("to_year", 2035)
+st.session_state.setdefault("to_month", "January")
+
 with center:
     st.markdown('<div class="controls">', unsafe_allow_html=True)
-    c1, c2 = st.columns([1.3, 2])
+    st.markdown("**Jump to a range**")
+    preset_cols = st.columns(len(PRESETS))
+    for col, (label, (fy, fm, ty, tm)) in zip(preset_cols, PRESETS.items()):
+        with col:
+            if st.button(label, use_container_width=True):
+                st.session_state["from_year"] = fy
+                st.session_state["from_month"] = fm
+                st.session_state["to_year"] = ty
+                st.session_state["to_month"] = tm
+
+    c1, c2 = st.columns(2)
     with c1:
-        start_mode = st.segmented_control(
-            "Start the outlook from",
-            options=["End of record (2014-12)", "A date I pick"],
-            default="End of record (2014-12)", required=True,
-        )
-        if start_mode == "A date I pick":
-            origin_idx = st.selectbox(
-                "Which month?", options=range(len(month_options)),
-                index=len(month_options) - 25,
-                format_func=lambda i: month_options[i].strftime("%B %Y"),
-                help="Pick a month before the end of the record to also see what "
-                     "actually happened next, for comparison.",
-            )
-            origin_ts = month_options[origin_idx]
-        else:
-            origin_ts = last_month
+        st.markdown("**Predict from**")
+        fc1, fc2 = st.columns([1.3, 1])
+        with fc1:
+            from_month = st.selectbox("Month", MONTH_NAMES, key="from_month",
+                                      label_visibility="collapsed")
+        with fc2:
+            from_year = st.number_input("Year", min_value=MIN_YEAR, max_value=2500,
+                                        key="from_year", step=1, label_visibility="collapsed")
     with c2:
-        target_year = st.number_input(
-            "Project out to year", min_value=origin_ts.year + 1, max_value=2500,
-            value=2035, step=1,
-            help="Pick any year you want to see. No ceiling beyond the input box "
-                 "itself -- type 2050, 2100, whatever you need.",
-        )
-        horizon_years = target_year - origin_ts.year
-        horizon = horizon_years * 12
-        st.caption(f"That's **{horizon_years} years** past {origin_ts:%b %Y}.",
-                  unsafe_allow_html=True)
+        st.markdown("**to**")
+        tc1, tc2 = st.columns([1.3, 1])
+        with tc1:
+            to_month = st.selectbox("Month", MONTH_NAMES, key="to_month",
+                                    label_visibility="collapsed")
+        with tc2:
+            to_year = st.number_input("Year", min_value=MIN_YEAR, max_value=2500,
+                                      key="to_year", step=1, label_visibility="collapsed")
+
+    display_from = pd.Timestamp(year=st.session_state["from_year"],
+                                month=MONTH_NAMES.index(st.session_state["from_month"]) + 1, day=1)
+    display_to = pd.Timestamp(year=st.session_state["to_year"],
+                              month=MONTH_NAMES.index(st.session_state["to_month"]) + 1, day=1)
+    if display_to < display_from:
+        display_from, display_to = display_to, display_from
+    from_label = display_from.strftime("%B %Y")
+    to_label = display_to.strftime("%B %Y")
 
     with st.expander("Advanced settings"):
         n_reps = st.slider("Synthetic replicates", 100, 1000, 400, 100,
                            help="More replicates = smoother uncertainty bands, slower to compute.")
-        hist_window = st.slider("History to show on the chart (months)", 12, 240, 48, 6)
+        show_recent_history = st.checkbox(
+            "Show recent observed history alongside the forecast", value=True,
+            help="Only shown when the forecast window starts reasonably soon after "
+                 "the data ends -- otherwise the chart would be mostly empty space.")
 
     go = st.button("Get the Outlook", type="primary")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    origin_label = origin_ts.strftime("%B %Y")
-
     outputs = {}
     if go:
-        with st.spinner("Running a thousand possible futures for each variable..."):
+        full_horizon = (display_to.year - last_month.year) * 12 + (display_to.month - last_month.month)
+        window_start = (display_from.year - last_month.year) * 12 + (display_from.month - last_month.month)
+        with st.spinner(f"Running a thousand possible futures out to {to_label} for each variable..."):
             for v in ["discharge", "rainfall", "stage"]:
                 df = full_df[v]
                 model = fit_model(v)
                 r = results["variables"][v]
-                hist_to_origin = df.loc[:origin_ts]
-                ens = simulate_ensemble(model, hist_to_origin["log_value"].to_numpy(),
-                                        horizon, n_reps=n_reps, method="gaussian", seed=None)
-                fcst_dates = [origin_ts + pd.DateOffset(months=i + 1) for i in range(horizon)]
-                origin_value = float(hist_to_origin["value"].iloc[-1])
+                ens_full = simulate_ensemble(model, df["log_value"].to_numpy(),
+                                             full_horizon, n_reps=n_reps, method="gaussian", seed=None)
+                ens = ens_full[:, window_start:]  # only the requested [from, to] window
+                fcst_dates = [display_from + pd.DateOffset(months=i) for i in range(ens.shape[1])]
                 q_median = np.median(ens, axis=0)
                 q_lo, q_hi = np.percentile(ens, [5, 95], axis=0)
-                actual = df["value"].reindex(fcst_dates)
-                n_actual = int(actual.notna().sum())
 
                 avg_val = float(np.mean(q_median))
                 hist_mean = r["historical_stats"]["mean"]
-                trend_word, trend_dir = classify_trend(q_median, origin_value)
+                trend_word, trend_dir = classify_trend(q_median, float(q_median[0]))
                 level_word, level_status = classify_level(avg_val, hist_mean)
                 n_ok, n_tot = r["validation_n_within"], r["validation_n_total"]
 
                 outputs[v] = dict(
-                    df=df, hist_to_origin=hist_to_origin, fcst_dates=fcst_dates,
-                    q_median=q_median, q_lo=q_lo, q_hi=q_hi, actual=actual, n_actual=n_actual,
+                    df=df, fcst_dates=fcst_dates,
+                    q_median=q_median, q_lo=q_lo, q_hi=q_hi,
                     avg_val=avg_val, hist_mean=hist_mean, trend_word=trend_word,
                     trend_dir=trend_dir, level_word=level_word, level_status=level_status,
                     n_ok=n_ok, n_tot=n_tot, r=r,
                 )
 
     if outputs:
-        st.markdown(f"#### The picture behind the outlook &mdash; {fmt_span(horizon)} from {origin_label} "
-                   f"(reaching {(origin_ts + pd.DateOffset(months=horizon)).year})")
+        st.markdown(f"#### The picture behind the outlook &mdash; {from_label} to {to_label}")
+        gap_months = (display_from.year - last_month.year) * 12 + (display_from.month - last_month.month)
+        show_hist = show_recent_history and gap_months <= 60
         tabs = st.tabs([VAR_LABEL[v] for v in ["discharge", "rainfall", "stage"]])
         for tab, v in zip(tabs, ["discharge", "rainfall", "stage"]):
             o = outputs[v]
             with tab:
-                hist = o["hist_to_origin"]["value"].iloc[-hist_window:]
-                hist_df = pd.DataFrame({"date": hist.index, "value": hist.values})
                 fcst_df = pd.DataFrame({
                     "date": o["fcst_dates"], "median": o["q_median"],
                     "lo": o["q_lo"], "hi": o["q_hi"],
@@ -341,48 +352,29 @@ with center:
                     tooltip=[alt.Tooltip("date:T", title="Month", format="%b %Y"),
                             alt.Tooltip("median:Q", title=f"Expected ({UNIT[v]})", format=".1f")],
                 )
-                hist_line = alt.Chart(hist_df).mark_line(color=NAVY, strokeWidth=1.8).encode(
-                    x="date:T", y="value:Q",
-                    tooltip=[alt.Tooltip("date:T", title="Month", format="%b %Y"),
-                            alt.Tooltip("value:Q", title=f"Observed ({UNIT[v]})", format=".1f")],
-                )
-                layers = [band, hist_line, median_line]
-                if o["n_actual"]:
-                    actual_df = pd.DataFrame({
-                        "date": o["fcst_dates"][:o["n_actual"]],
-                        "value": o["actual"].iloc[:o["n_actual"]].to_numpy(),
-                    })
-                    actual_line = alt.Chart(actual_df).mark_line(
-                        color=NAVY, strokeDash=[2, 2], point=alt.OverlayMarkDef(color=NAVY, size=25),
-                    ).encode(
+                layers = [band, median_line]
+                if show_hist:
+                    hist = o["df"]["value"].loc[:last_month].iloc[-48:]
+                    hist_df = pd.DataFrame({"date": hist.index, "value": hist.values})
+                    hist_line = alt.Chart(hist_df).mark_line(color=NAVY, strokeWidth=1.8).encode(
                         x="date:T", y="value:Q",
                         tooltip=[alt.Tooltip("date:T", title="Month", format="%b %Y"),
-                                alt.Tooltip("value:Q", title=f"What actually happened ({UNIT[v]})", format=".1f")],
+                                alt.Tooltip("value:Q", title=f"Observed ({UNIT[v]})", format=".1f")],
                     )
-                    layers.append(actual_line)
+                    layers.insert(0, hist_line)
 
                 chart = alt.layer(*layers).properties(height=270).interactive()
                 st.altair_chart(chart, use_container_width=True)
 
-                legend_bits = [
-                    f'<span style="color:{NAVY}">&#9644;</span> Observed history',
-                    f'<span style="color:{VAR_COLOR[v]}">&#9646;&#9646;</span> Uncertainty range (90%)',
-                    f'<span style="color:{VAR_COLOR[v]}">- - -</span> Expected path',
-                ]
-                if o["n_actual"]:
-                    legend_bits.append(f'<span style="color:{NAVY}">&middot;&middot;&middot;</span> What actually happened')
+                legend_bits = []
+                if show_hist:
+                    legend_bits.append(f'<span style="color:{NAVY}">&#9644;</span> Observed history (up to Dec 2014)')
+                legend_bits.append(f'<span style="color:{VAR_COLOR[v]}">&#9646;&#9646;</span> Uncertainty range (90%)')
+                legend_bits.append(f'<span style="color:{VAR_COLOR[v]}">- - -</span> Expected path')
                 st.caption(" &nbsp;&nbsp; ".join(legend_bits), unsafe_allow_html=True)
 
-                st.markdown(f'<div class="narrative">{build_narrative(v, UNIT[v], horizon, origin_label, o["avg_val"], o["hist_mean"], o["trend_word"], o["level_word"], o["n_ok"], o["n_tot"])}</div>',
+                st.markdown(f'<div class="narrative">{build_narrative(v, UNIT[v], from_label, to_label, o["avg_val"], o["hist_mean"], o["trend_word"], o["level_word"], o["n_ok"], o["n_tot"])}</div>',
                            unsafe_allow_html=True)
-
-                if o["n_actual"]:
-                    n_inside = int(np.sum(
-                        (o["actual"].iloc[:o["n_actual"]].to_numpy() >= o["q_lo"][:o["n_actual"]]) &
-                        (o["actual"].iloc[:o["n_actual"]].to_numpy() <= o["q_hi"][:o["n_actual"]])
-                    ))
-                    st.caption(f"Of the {o['n_actual']} months we can check, {n_inside} landed inside "
-                              f"the uncertainty range shown above.")
 
         with st.expander("For the curious: the statistics behind this outlook", expanded=False):
             st.markdown(
