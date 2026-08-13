@@ -53,6 +53,97 @@ Everything below describes the project **after** both of these changes.
 
 ---
 
+## ❓ Questions to expect, and where the answer lives
+
+Every question below is one the supervisor has actually asked, in the defence session
+that drove this rewrite. Full detail (with page/section numbers) is in the PDF; this is
+the fast-reference version.
+
+**On the choice of model**
+
+- **"Why ARIMA, not AR alone, MA alone, ARMA, or ARIMAX?"** AR alone assumes only past
+  values matter; MA alone assumes only past shocks matter; ARMA combines both but needs
+  stationary data; ARIMA adds differencing for non-stationary data; ARIMAX adds an
+  outside variable. Order selection tests AR-only, MA-only, and mixed forms for every
+  variable and keeps whichever fits best by AIC — the data picks, not us. ARIMAX was
+  ruled out on purpose: each variable is forecast from its own past only, so there's no
+  outside variable to add. → *Report Ch.2 §2.4; app "For the curious" shows each
+  variable's actual (p,d,q).*
+- **"Shouldn't the model work on rainfall too, not just discharge?"** It does — same
+  code, unmodified, independently fits discharge, rainfall, and stage. → *App: switch
+  tabs between the three variables. Report Ch.2 §2.4, Ch.3 §3.2.*
+
+**On daily vs. monthly**
+
+- **"Why daily data with ARIMA?"** We're not using daily anymore. Differencing only
+  does real work — removing seasonal drift — at a monthly timestep. → *App left rail;
+  Report Ch.1 §1.5, Ch.3 §3.1.*
+
+**On parameter estimation (asked the most, and the most pointed)**
+
+- **"How do you estimate the parameters? p,d,q aren't the parameters."** Correct — p,d,q
+  are the *order* (structure), chosen by AIC. The actual parameters are the phi (AR) and
+  theta (MA) coefficients, estimated by conditional sum of squares, each with a standard
+  error. → *App "For the curious" → coefficient table per variable. Report Ch.3 §3.5,
+  Ch.4 §4.4 (Table 6, Fig.6).*
+- **"You must show the data fits ARIMA, not assume it."** Each variable runs through
+  ADF and KPSS stationarity tests before a model is picked, and the result is shown, not
+  just the conclusion. → *App "For the curious" → stationarity evidence line. Report
+  Ch.3 §3.5, Ch.4 §4.2.*
+
+**On whether it can even forecast**
+
+- **"Can it forecast? Why only 7 days?"** That cap is gone — leftover default, not a
+  real limit. Horizon now goes up to 5 years. → *App "How far ahead" control.*
+
+**On checking correctness**
+
+- **"Your data stops at 2014 — how do you know 2015 is correct? How do you check?"**
+  You can't check one stochastic forecast against one real sequence — each run differs.
+  What's checkable is whether history's *properties* (mean, variability, seasonality,
+  drought length, peak size) fall inside the range 1,000 simulated versions produce.
+  → *App: the shaded band + "track record" score on every card. Report Ch.3 §3.6, Ch.4
+  §4.6.*
+- **"Stochastic forecasts — you can only compare properties, not the forecast itself."**
+  Yes, exactly — that's the whole 2026-08-12 rebuild in one sentence.
+- **"Is 34 years 'not enough', or daily data 'too much'?"** Neither is the point —
+  forecasting exists because the future is never in hand, regardless of how much history
+  you have. → *Report Ch.2 (Matalas 1967, stochastic hydrology).*
+
+**On the study basin**
+
+- **"Why a US river? That's a standard panel question."** We looked into Nigeria
+  seriously — see below for the specific numbers. Short version: neither Nigerian
+  custodian could give a firm price or delivery date inside the project timeline, so the
+  pipeline was built on the Conecuh record, already in hand and verified. The Nigerian
+  request stayed open as a possible future swap — this is a disclosed trade-off, not a
+  hidden one. → *Report Ch.1 §1.5.*
+
+### Why Conecuh, specifically — the Nigerian data attempt
+
+Two real custodians hold Nigerian river data, and both were checked, not skipped:
+
+- **NIHSA (Nigeria Hydrological Services Agency)** — the federal agency under the
+  Ministry of Water Resources, running 273 gauging stations nationwide, holding stage,
+  discharge, sediment and water-quality records. Has a real online request form
+  (`nihsa.gov.ng/data-request`) stating **5–7 working days** turnaround for
+  straightforward requests. But **it publishes no fee schedule** — cost is assessed per
+  request and only communicated *after* NIHSA reviews it, so there was no way to know in
+  advance whether a request would be free, discounted, or a real cost, or the true
+  delivery date once that review step is added on.
+- **OORBDA (Ogun-Osun River Basin Development Authority)** — the authority that actually
+  operates the gauging stations on the Ogun and Yewa rivers, the right rivers for a
+  Lagos-relevant study. Access is by formal letter on departmental letterhead, with no
+  published turnaround at all.
+
+Given the project deadline, the methodology couldn't be built around data with an
+unknown price *and* an unknown delivery date. The Conecuh record was already downloaded,
+verified against USGS NWIS, and clean across all three variables, so it became the
+working basin while the Nigerian request stayed open. A Beninese fallback (AMMA-CATCH —
+free, no request needed) was also scoped; see `DATA_OPTIONS.md` for the full breakdown.
+
+---
+
 ## 🧠 How it works (the science, simply)
 
 Each of the three variables — discharge, rainfall, stage — gets its own **independent

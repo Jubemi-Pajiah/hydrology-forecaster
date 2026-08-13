@@ -4,9 +4,11 @@ make_overview_pdf.py — Generate a plain-English project overview PDF.
 Sections:
   0. What changed on 2026-08-12 (gauge correction + monthly/3-variable/
      stochastic pivot)
-  1. Very basic explanation (high-school level)
-  2. The actual explanation (builds on #1, technical)
-  3. How to use the software
+  1. Q&A: every question the supervisor has actually asked, with a plain
+     answer and a pointer to where it's addressed in the app/report
+  2. Very basic explanation (high-school level)
+  3. The actual explanation (builds on #2, technical)
+  4. How to use the software
 
 This project forecasts discharge, rainfall and stage -- three independent
 monthly ARIMA models, each from that variable's own past only -- and
@@ -127,6 +129,22 @@ class PDF(FPDF):
         self.write(6, clean(text))
         self.ln(8)
 
+    def qa(self, question, answer, pointer):
+        self.set_x(self.l_margin)
+        self.set_fill_color(*LIGHT)
+        self.set_text_color(*NAVY)
+        self.set_font("Helvetica", "B", 11.5)
+        self.multi_cell(0, 6.5, clean("Q: " + question), fill=True)
+        self.set_x(self.l_margin)
+        self.set_text_color(*TEXT)
+        self.set_font("Helvetica", "", 11)
+        self.multi_cell(0, 6, clean(answer))
+        self.set_x(self.l_margin)
+        self.set_text_color(*BLUE)
+        self.set_font("Helvetica", "I", 10)
+        self.multi_cell(0, 6, clean("-> Where to look: " + pointer))
+        self.ln(4)
+
     def code(self, lines):
         self.set_fill_color(*CODEBG)
         self.set_text_color(*TEXT)
@@ -213,9 +231,156 @@ def build():
         "ARIMA approach on the same supervisor's instruction, and is not revisited "
         "here -- see CLAUDE.md and archive/ for that history if needed.")
 
-    # ── 1. Very basic explanation ──────────────────────────────────────────────
+    # ── 1. Questions to expect, and where the answer lives ──────────────────────
     pdf.add_page()
-    pdf.h1(1, "The Simple Version (for anyone)")
+    pdf.h1(1, "Questions To Expect, And Where The Answer Lives")
+    pdf.body(
+        "Every question below is one the supervisor has actually asked, in the exact "
+        "defence session that drove this rewrite. Each answer is short on purpose -- "
+        "say the sentence, then point at the app or the report page and let it do the "
+        "rest of the talking.")
+
+    pdf.h2("On the choice of model")
+    pdf.qa(
+        "Why ARIMA, and not AR alone, MA alone, ARMA, or ARIMAX?",
+        "AR alone assumes only past values matter; MA alone assumes only past random "
+        "shocks matter; ARMA combines both but needs the series already stationary; "
+        "ARIMA adds differencing on top of ARMA for series that are not; ARIMAX adds "
+        "an outside variable. We don't pick by preference -- the order-selection step "
+        "tests AR-only, MA-only and mixed forms for every one of the three variables "
+        "and keeps whichever the Akaike Information Criterion scores best. ARIMAX was "
+        "ruled out deliberately: each variable is forecast from its own past only, so "
+        "there is no outside variable to add.",
+        "Report Chapter 2, Section 2.4 (family comparison, explicit ARIMAX "
+        "paragraph). App: each model's actual (p,d,q) is shown under 'For the "
+        "curious'.")
+    pdf.qa(
+        "Shouldn't the same model work on rainfall too, not just discharge?",
+        "It does. The same code, unchanged, independently fits discharge, rainfall "
+        "and river stage -- three different variables, three different fitted "
+        "models, one shared method.",
+        "App: switch the River flow / Rainfall / River level tabs -- identical "
+        "layout each time, different numbers. Report Chapter 2, Section 2.4; "
+        "Chapter 3, Section 3.2.")
+
+    pdf.h2("On daily versus monthly")
+    pdf.qa(
+        "Why were you using daily data with ARIMA?",
+        "We aren't, any more. Differencing -- the 'I' in ARIMA -- only does real "
+        "work when there is seasonal drift to remove, and that shows up at a "
+        "monthly timestep, not day to day. The whole pipeline was rebuilt on "
+        "monthly data for exactly this reason.",
+        "App: left-hand 'Good to know' panel. Report Chapter 1, Section 1.5; "
+        "Chapter 3, Section 3.1.")
+
+    pdf.h2("On parameter estimation (asked the most, and the most pointed)")
+    pdf.qa(
+        "How do you estimate the parameters? p, d, q are not the parameters.",
+        "Correct, and now answered properly. p, d, q are the order -- the shape of "
+        "the model, chosen by AIC. The actual parameters are the phi (AR) and theta "
+        "(MA) coefficients, estimated by conditional sum of squares (exact least "
+        "squares when there's no MA term). Every coefficient now carries a standard "
+        "error too, so it's clear how precisely each one is known, not just its "
+        "value.",
+        "App: 'For the curious' -> a coefficient table per variable, value and "
+        "standard error side by side. Report Chapter 3, Section 3.5; Chapter 4, "
+        "Section 4.4 (Table 6 and Figure 6).")
+    pdf.qa(
+        "You must show the data actually fits ARIMA -- not assume it.",
+        "Each variable is run through the Augmented Dickey-Fuller and KPSS "
+        "stationarity tests before any model is chosen, and the result -- not just "
+        "the conclusion -- is shown.",
+        "App: 'For the curious' -> stationarity evidence line per variable "
+        "(ADF/KPSS statistics). Report Chapter 3, Section 3.5; Chapter 4, "
+        "Section 4.2.")
+
+    pdf.h2("On whether it can even forecast")
+    pdf.qa(
+        "Can it forecast? Why is it limited to 7 days?",
+        "That cap is gone -- it was a leftover default, not a real limit of the "
+        "method. The model projects as far ahead as asked; the app now offers up "
+        "to 5 years.",
+        "App: the 'How far ahead' control, 3 months to 5 years.")
+
+    pdf.h2("On checking whether a forecast is correct")
+    pdf.qa(
+        "Your data stops at 2014 -- how do you know a forecast into 2015 is "
+        "correct? How do you check it?",
+        "You cannot check a single stochastic forecast against a single real "
+        "sequence and call it right or wrong -- each run of the model produces a "
+        "different plausible sequence, so there is no one number to be 'correct'. "
+        "What's checkable is whether the real historical record's properties -- "
+        "average, variability, seasonal pattern, drought length, peak size -- fall "
+        "inside the range that a thousand simulated versions produce.",
+        "App: the shaded band on every chart, plus the 'track record' score on "
+        "each card (e.g. 7/7). Report Chapter 3, Section 3.6; Chapter 4, Section "
+        "4.6.")
+    pdf.qa(
+        "When forecasting stochastic data, can't you only compare properties, not "
+        "the forecast itself, to the original data?",
+        "Yes -- that is exactly what changed. This is no longer a point-forecast "
+        "model scored against one observed sequence; it is a stochastic generator "
+        "scored by whether its output's statistical properties match history.",
+        "Same as above -- this is the core of the whole 2026-08-12 rebuild.")
+    pdf.qa(
+        "Isn't 34 years of data 'not enough', or daily data 'too much' -- which is "
+        "it?",
+        "Neither framing is the point. Forecasting exists precisely because the "
+        "future is never in hand, however much history you have; 34 years is "
+        "enough to estimate a model, and stochastic simulation is what you do with "
+        "a finite past, not a reason to wait for more of it.",
+        "Report Chapter 2 (stochastic hydrology literature, Matalas 1967).")
+
+    pdf.h2("On the study basin")
+    pdf.qa(
+        "Why a US river? Why not a Nigerian one -- that's a standard question the "
+        "panel will ask.",
+        "We looked into it seriously -- see the next section for the specific "
+        "numbers. Short version: the two Nigerian custodians (NIHSA and OORBDA) "
+        "could not give a firm price or delivery date inside the project timeline, "
+        "so the pipeline was built and validated on the Conecuh record, which was "
+        "already in hand, verified, and clean. The Nigerian request stayed open as "
+        "a possible future swap. This is a disclosed trade-off, not a hidden one -- "
+        "the thing actually being demonstrated is that the method generalises "
+        "across variables and would generalise across basins too, which does not "
+        "depend on which specific river supplied the numbers.",
+        "Report Chapter 1, Section 1.5. See 'Why Conecuh, specifically' below for "
+        "the full reasoning.")
+
+    pdf.h2("Why Conecuh, specifically: the Nigerian data attempt")
+    pdf.body(
+        "This was investigated properly, not skipped. Two custodians actually hold "
+        "Nigerian river data:")
+    pdf.bullet(
+        "Federal agency under the Ministry of Water Resources; runs 273 gauging "
+        "stations nationwide and holds stage, discharge, sediment and water-quality "
+        "records. Has a real online request form "
+        "(nihsa.gov.ng/data-request) and states a turnaround of 5-7 working days "
+        "for straightforward requests, longer for complex ones. But it does not "
+        "publish a fee schedule: cost is assessed per request and only "
+        "communicated after NIHSA has reviewed it, so there was no way to know in "
+        "advance whether a request would be free, discounted for academic use, or "
+        "a real cost -- or the true delivery date once that review step is added "
+        "to the stated 5-7 days.",
+        label="NIHSA (Nigeria Hydrological Services Agency):")
+    pdf.bullet(
+        "The basin authority that actually operates the gauging stations on the "
+        "Ogun and Yewa rivers -- the right rivers for a Lagos-relevant study. "
+        "Access is by formal letter on departmental letterhead, with no published "
+        "turnaround at all.",
+        label="OORBDA (Ogun-Osun River Basin Development Authority):")
+    pdf.body(
+        "Given the project deadline, the methodology could not be built around data "
+        "whose price and delivery date were both unknown. The Conecuh record was "
+        "already downloaded, verified against USGS NWIS, and clean across all three "
+        "variables, so it became the working basin while the Nigerian request stayed "
+        "open. Full detail, including a Beninese fallback option (AMMA-CATCH, free "
+        "and no request needed) that was also scoped, is in the working document "
+        "DATA_OPTIONS.md.")
+
+    # ── 2. Very basic explanation ──────────────────────────────────────────────
+    pdf.add_page()
+    pdf.h1(2, "The Simple Version (for anyone)")
 
     pdf.body(
         "A river does not change from one month to the next by pure chance. A wet "
@@ -248,9 +413,9 @@ def build():
         "seven, and the one it missed (its average level) is reported honestly "
         "rather than hidden.")
 
-    # ── 2. The actual explanation ──────────────────────────────────────────────
+    # ── 3. The actual explanation ──────────────────────────────────────────────
     pdf.add_page()
-    pdf.h1(2, "The Actual Version (technical)")
+    pdf.h1(3, "The Actual Version (technical)")
 
     pdf.body(
         "The project is a modular, open-source Python framework for monthly "
@@ -261,7 +426,7 @@ def build():
         "historical record. No variable is used to forecast another, and no "
         "exogenous (meteorological forecast) input is used.")
 
-    pdf.h2("2.1  The data")
+    pdf.h2("3.1  The data")
     pdf.body(
         f"Monthly discharge (m3/s), rainfall (mm/month) and stage (m) for the "
         f"Conecuh River at Brantley, Alabama (USGS gauge 02371500 -- verified "
@@ -274,7 +439,7 @@ def build():
         f"natural-log scale. The record is split into a training period "
         f"(1980-2003) and an independent validation period (2004-2014).")
 
-    pdf.h2("2.2  The model: three independent ARIMA(p, d, q)")
+    pdf.h2("3.2  The model: three independent ARIMA(p, d, q)")
     pdf.body(
         "An ARIMA model describes a series using three ingredients: an "
         "autoregressive part (the value depends on its own p past values), an "
@@ -293,7 +458,7 @@ def build():
         "variable is forecast from its own past only, by design, so there is no "
         "exogenous driver to add.")
 
-    pdf.h2("2.3  How each model was identified (Box-Jenkins)")
+    pdf.h2("3.3  How each model was identified (Box-Jenkins)")
     pdf.bullet("Augmented Dickey-Fuller and KPSS tests determined the differencing "
                "order for each variable independently. For this basin, at the "
                "monthly timestep, all three came back d = 0.", label="Stationarity:")
@@ -314,7 +479,7 @@ def build():
         f"   AIC={_v('stage','aic'):.1f}",
     ])
 
-    pdf.h2("2.4  Stochastic ensembles and property-based validation")
+    pdf.h2("3.4  Stochastic ensembles and property-based validation")
     pdf.body(
         "Rather than one deterministic forecast, each fitted model generates an "
         "ensemble of 1,000 synthetic monthly sequences over the validation period. "
@@ -338,7 +503,7 @@ def build():
         "This is reported as an acknowledged limitation, not concealed: a "
         "validation procedure that always passes would not be doing useful work.")
 
-    pdf.h2("2.5  Code structure")
+    pdf.h2("3.5  Code structure")
     pdf.code([
         "src/preprocess.py  - monthly loaders: discharge, rainfall, stage",
         "src/model.py       - ARIMA + ADF/KPSS/ACF/PACF/Ljung-Box + std. errors",
@@ -359,9 +524,9 @@ def build():
 
     # ── 3. How to use the software ──────────────────────────────────────────────
     pdf.add_page()
-    pdf.h1(3, "How to Use the Software")
+    pdf.h1(4, "How to Use the Software")
 
-    pdf.h2("3.0  The easy version")
+    pdf.h2("4.0  The easy version")
     pdf.body(
         "Open the app, pick a variable (discharge, rainfall or stage), pick a "
         "starting month and how many months ahead to look, and press Run "
@@ -377,7 +542,7 @@ def build():
     pdf.bullet("Read the answer: a band of plausible outcomes as cards, a table, "
                "a chart, and the property-based validation results.", label="5.")
 
-    pdf.h2("3.1  The web app, step by step (the main way to use it)")
+    pdf.h2("4.1  The web app, step by step (the main way to use it)")
     pdf.body(
         "Open the app and you get a browser page with two pages in the left "
         "sidebar: \"Forecast Tool\" and \"Documentation\". On the Forecast Tool "
@@ -391,7 +556,7 @@ def build():
                "synthetic band, and the property-based validation table showing "
                "how many statistics the model reproduces.", label="4.")
 
-    pdf.h2("3.2  The full run (get every chart and number at once)")
+    pdf.h2("4.2  The full run (get every chart and number at once)")
     pdf.body(
         "Run the whole study in one command. It loads all three monthly series, "
         "runs the stationarity tests, identifies and estimates all three ARIMA "
