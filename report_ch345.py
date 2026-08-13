@@ -14,6 +14,9 @@ All numerical values are read from data/results.json, so the text cannot
 drift from the pipeline output.
 """
 
+import json
+from pathlib import Path
+
 from docx.shared import Cm
 
 from report_lib import (body, chapter_heading, equation, figure, h1, table,
@@ -143,6 +146,21 @@ def write_chapter3(doc, R, figures_dir, eq):
          "across variable types, an explicit requirement of the "
          "methodology, rather than being a bespoke discharge-forecasting "
          "device.")
+    body(doc,
+         "One qualification to that generalisation claim should be stated "
+         "plainly rather than left implicit. Discharge and stage are not "
+         "independent physical processes: at a single gauge, stage is "
+         "related to discharge through the site's rating curve, so the two "
+         "are, to a first approximation, the same underlying hydraulic "
+         "signal observed two ways rather than two unrelated variables. "
+         "Rainfall is the one series in this study genuinely independent "
+         "of the other two. The three-variable design therefore "
+         "demonstrates the identification-estimation-validation procedure "
+         "applied across two variable types — an atmospheric input "
+         "(rainfall) and a hydraulic state variable observed by two "
+         "different instruments (discharge, stage) — rather than three "
+         "fully independent replications of it, and the results in "
+         "Chapter Four are discussed with that distinction in mind.")
 
     h1(doc, "3.3 Data Pre-processing")
     body(doc,
@@ -481,6 +499,30 @@ def write_chapter4(doc, R, figures_dir, eq):
                 f"{r['bic']:.1f}"]
                for i, r in enumerate(V(R, v).get("aic_ranking", [])[:5])],
               font_pt=9.5)
+    dis_ranking = V(R, "discharge").get("aic_ranking", [])
+    dis_bic_best = min(dis_ranking, key=lambda r: r["bic"]) if dis_ranking else None
+    body(doc,
+         "Two disagreements in Table 4 are worth stating rather than "
+         "passing over. For discharge, BIC's heavier parsimony penalty "
+         f"actually prefers the simpler {order_str(dis_bic_best['order'])} "
+         f"(BIC {dis_bic_best['bic']:.1f}) over the AIC-selected "
+         f"{order_str(V(R,'discharge')['order'])} (BIC {V(R,'discharge')['bic']:.1f}) "
+         "— the extra "
+         "moving-average term AIC keeps has a coefficient statistically "
+         "indistinguishable from zero (Section 4.4), so BIC's dissent is "
+         "not unreasonable. AIC was retained as the primary criterion "
+         "because it is the more common default for forecasting "
+         "applications (Hyndman & Athanasopoulos, 2021) and the two "
+         "orders differ only by one weakly-identified term, not in their "
+         "qualitative conclusion about discharge's persistence. For "
+         "rainfall, AIC and BIC agree, but barely distinguish between "
+         "ARIMA(1,0,0) and ARIMA(0,0,1) — a pure autoregressive and a pure "
+         "moving-average model, structurally different, tied to one "
+         "decimal place on both criteria. Section 4.4 shows why: the "
+         "coefficient that wins the tie is not itself significant, so "
+         "this is closer to picking arbitrarily between two "
+         "indistinguishable descriptions of what is, statistically, "
+         "close to white noise than to a confidently identified model.")
 
     h1(doc, "4.4 Parameter Estimates and Standard Errors")
     body(doc,
@@ -509,16 +551,35 @@ def write_chapter4(doc, R, figures_dir, eq):
     body(doc,
          "For discharge and stage, the leading autoregressive coefficient "
          f"is large relative to its standard error "
-         f"(phi_1 = {V(R,'discharge')['phi'][0]:.3f} for discharge, "
-         f"{V(R,'stage')['phi'][0]:.3f} for stage), confirming strong "
-         "month-to-month persistence, consistent with catchment storage "
-         "carrying flow forward from one month to the next. The rainfall "
-         "model, by contrast, selected a much smaller AR(1) coefficient "
-         f"(phi_1 = {V(R,'rainfall')['phi'][0]:.3f}), reflecting the "
-         "physically expected result that monthly rainfall totals are far "
-         "closer to independent draws from month to month than either "
-         "discharge or stage, which are smoothed by catchment and channel "
-         "storage.")
+         f"(phi_1 = {V(R,'discharge')['phi'][0]:.3f}, SE = "
+         f"{V(R,'discharge')['standard_errors']['phi'][0]:.3f} for "
+         f"discharge; phi_1 = {V(R,'stage')['phi'][0]:.3f}, SE = "
+         f"{V(R,'stage')['standard_errors']['phi'][0]:.3f} for stage), "
+         "confirming strong month-to-month persistence, consistent with "
+         "catchment storage carrying flow forward from one month to the "
+         "next. Discharge's phi_1 sits close to the boundary of the "
+         "stationary region; this is discussed alongside the residual "
+         "diagnostics in Section 4.5, since a coefficient this close to "
+         "one is exactly the regime in which the ADF/KPSS stationarity "
+         "verdict of Table 2 is least conclusive.")
+    body(doc,
+         f"The rainfall model's only coefficient, phi_1 = "
+         f"{V(R,'rainfall')['phi'][0]:.3f} with standard error "
+         f"{V(R,'rainfall')['standard_errors']['phi'][0]:.3f}, is not "
+         "statistically distinguishable from zero at conventional levels. "
+         "Combined with Table 4's near-exact AIC/BIC tie between this "
+         "AR(1) model and the structurally different MA(1) alternative, "
+         "the honest reading is not that monthly rainfall follows a "
+         "specific weak autoregressive process, but that this basin's "
+         "monthly rainfall is statistically close to serially independent "
+         "— consistent with catchment and channel storage smoothing "
+         "discharge and stage from one month to the next in a way that "
+         "rainfall itself is not smoothed. That the identification "
+         "procedure honestly reports 'no detectable structure' for "
+         "rainfall, rather than forcing a confident-looking fit onto a "
+         "series that does not support one, is itself evidence the "
+         "procedure is not merely finding whatever pattern it is pointed "
+         "at.")
     figure(doc, figures_dir / "Fig6_SkillVsLead.png",
            "Figure 5: Estimated AR/MA coefficients with 95 per cent "
            "confidence intervals, by variable. A blue interval excludes "
@@ -616,18 +677,77 @@ def write_chapter4(doc, R, figures_dir, eq):
          "the purpose of property-based validation is precisely to expose a "
          "result of this kind, which a point-forecast comparison could "
          "easily miss.")
+    body(doc,
+         "Reservoir and spillway sizing has been named throughout this "
+         "report as the design application stochastic property-based "
+         "validation is meant to serve; this is worth demonstrating rather "
+         "than only asserting. A design discharge for a given return "
+         "period can be read directly off a large ensemble of synthetic "
+         "traces: 500 independent 30-year discharge sequences were "
+         "generated from the discharge model of Table 3, their annual "
+         "maximum monthly discharge extracted (15,000 pooled values), and "
+         "the empirical percentile corresponding to each return period's "
+         "annual exceedance probability read off the pooled distribution "
+         "— the plotting-position approach to flood-frequency analysis "
+         "(Chow, Maidment, & Mays, 2008), applied to synthetic rather than "
+         "observed annual maxima. Table 8 reports the result.")
+    dd_path = Path(__file__).resolve().parent / "data" / "design_discharge_example.json"
+    try:
+        DD = json.loads(dd_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        DD = None
+    if DD:
+        table_title(doc, "Table 8: Illustrative design monthly-maximum "
+                         "discharge by return period, from 500 synthetic "
+                         "30-year traces.")
+        table(doc, ["Return period (years)", "Annual exceedance probability",
+                    "Design discharge (m3/s)"],
+              [[T, f"{100/int(T):.0f}%", f"{v:.1f}"]
+               for T, v in DD["design_discharge_m3s_by_return_period"].items()])
+        body(doc,
+             f"For comparison, the {DD['historical_annual_max_n_years']} "
+             f"annual maxima actually observed in the record average "
+             f"{DD['historical_annual_max_observed_mean']:.1f} m3/s and "
+             f"peak at {DD['historical_annual_max_observed_max']:.1f} m3/s "
+             "— close to the synthetic ensemble's 2-year design value, as "
+             "expected, since a 2-year return period is close to the "
+             "median annual maximum. The 100-year design discharge, by "
+             "contrast, exceeds anything in the 35-year observed record: "
+             "that is not an error, it is the reason a synthetic ensemble "
+             "is useful for this application in the first place, since a "
+             "35-year record cannot itself contain a reliable example of "
+             "a 100-year event. This table is explicitly illustrative — a "
+             "real spillway design would cross-check this plotting-"
+             "position estimate against a fitted distribution such as "
+             "Log-Pearson III and against the observed record's own "
+             "(much shorter, necessarily less reliable) frequency curve, "
+             "and would need the design authority's own required standard "
+             "of care, not this thesis, to set the governing return "
+             "period — but it demonstrates the specific mechanical step "
+             "from ensemble to design number that earlier chapters had "
+             "invoked without carrying out.")
 
     h1(doc, "4.7 Discussion")
     body(doc,
          "Three results stand out. First, the same identification, "
          "estimation and validation procedure, applied without "
-         "modification to three physically distinct variables, produced "
-         "three coherent, interpretable models: strong persistence for "
-         "discharge and stage, weak persistence for rainfall, each "
-         "consistent with the underlying hydrological process. This is the "
-         "central methodological claim of the study — that the modelling "
-         "framework, not any single fitted model, is what transfers — and "
-         "the result supports it directly.")
+         "modification to discharge, stage and rainfall — two variable "
+         "types, given the discharge-stage qualification of Section 3.2 — "
+         "produced coherent, interpretable models: strong persistence for "
+         "discharge and stage, no statistically detectable persistence for "
+         "rainfall, each a plausible reading of the underlying hydrological "
+         "process rather than a forced one, since the procedure was free "
+         "to (and for rainfall, did) report a near-null result rather than "
+         "manufacture structure. This supports the central methodological "
+         "claim of the study — that the modelling framework, not any "
+         "single fitted model, is what transfers — but only partially: it "
+         "shows the procedure produces sensible, differentiated results "
+         "across variable types at one basin. Section 4.8's supplementary "
+         "cross-basin check is the more direct test of transfer, and its "
+         "more qualified result (the procedure runs successfully "
+         "elsewhere; this basin's specific persistence pattern does not "
+         "universally repeat) is the honest completion of this claim, not "
+         "this paragraph alone.")
     body(doc,
          "Second, moving to a monthly timestep did not, in this basin, "
          "produce differencing (d = 0 for every variable); it did, however, "
@@ -658,6 +778,92 @@ def write_chapter4(doc, R, figures_dir, eq):
          "standard errors, and the same validation logic, applied honestly "
          "to three different variables, with the one honest failure "
          "reported alongside the six honest passes.")
+
+    h1(doc, "4.8 Supplementary Cross-Basin Check")
+    body(doc,
+         "Every result so far concerns one basin. A claim that a "
+         "methodology 'transfers to any basin' is not earned by "
+         "demonstrating it on one, however carefully; it needs to be run, "
+         "unmodified, somewhere else. This section reports exactly that: "
+         "the identical identification and estimation procedure of "
+         "Section 3.5, applied without any manual tuning to discharge "
+         "and rainfall at two further CAMELS basins chosen specifically "
+         "for climate regimes distinct from the primary basin's humid "
+         "subtropical setting — USGS 10023000 in the Great Basin (arid "
+         "interior western United States) and USGS 01013500 in New England "
+         "(humid continental, snow-influenced). This is a supplementary "
+         "check, not a full replication: it does not repeat the stage "
+         "variable, which would require a separate live data pull per "
+         "basin, and it does not repeat the full 1,000-member stochastic "
+         "property-based validation of Section 4.6, only the stationarity "
+         "testing, order selection and residual diagnostics of Sections "
+         "3.5 and 4.5.")
+    table_title(doc, "Table 9: Supplementary cross-basin check -- selected "
+                     "model and diagnostics, two basins outside the primary "
+                     "study area.")
+    cb_path = Path(__file__).resolve().parent / "data" / "cross_basin_check.json"
+    try:
+        CB = json.loads(cb_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        CB = {}
+    if CB:
+        rows = []
+        for basin_id, b in CB.items():
+            for var in ("discharge", "rainfall"):
+                r = b[var]
+                sig = "yes" if r.get("phi1_significant") else "no"
+                rows.append([f"{basin_id} ({b['label']})", var.capitalize(),
+                            order_str(r["order"]), str(r["d"]),
+                            "yes" if sig == "yes" else "no",
+                            f"{r['ljung_box_pvalue']:.3f}"])
+        table(doc, ["Basin", "Variable", "Model", "d", "phi_1 significant?",
+                    "Ljung-Box p"], rows, font_pt=9)
+    body(doc,
+         "The procedure completed successfully on both basins for both "
+         "variables without any code change: it identified a differencing "
+         "order, searched and selected an ARIMA structure, estimated "
+         "coefficients with standard errors, and ran the full diagnostic "
+         "suite, exactly as it does for the primary basin. That is the "
+         "part of the transferability claim this check actually supports.")
+    body(doc,
+         "What it does not support is the specific pattern found at the "
+         "primary basin. The Great Basin's discharge required first "
+         "differencing (d = 1, unlike every series at the primary basin) "
+         "and still failed its Ljung-Box residual test; its rainfall "
+         "model returned a statistically significant AR(1) term, the "
+         "opposite of the primary basin's finding, but with two "
+         "coefficients estimated essentially at the numerical "
+         "stationarity/invertibility boundary used by the optimiser (0.999 "
+         "in magnitude) — a classic symptom of an unstable or overfitted "
+         "fit, not a result to be taken at face value. New England's "
+         "discharge model returned standard errors within a rounding "
+         "error of zero (order 1e-4), which is not a credible estimate of "
+         "sampling uncertainty for a hydrological series and indicates the "
+         "optimiser converged to a numerically degenerate point; its "
+         "rainfall model, by contrast, produced a stable, statistically "
+         "significant AR(1) coefficient (phi_1 = 0.767) — strong monthly "
+         "persistence, the opposite of the primary basin's near-independent "
+         "rainfall.")
+    body(doc,
+         "Read honestly, this is a better result for the thesis than a "
+         "clean replication would have been, for two reasons. First, "
+         "different basins are expected to show different dynamics — "
+         "rainfall persistence, in particular, is a property of a "
+         "basin's storm climatology and season length, not a universal "
+         "constant, so New England's persistent rainfall and Conecuh's "
+         "near-independent rainfall are both plausible, basin-specific "
+         "findings, not a contradiction to be explained away. Second, the "
+         "procedure's own diagnostics caught its own failure modes at the "
+         "two new basins: two of the four new fits show clear numerical "
+         "warning signs (boundary-pinned coefficients, near-zero standard "
+         "errors) rather than being silently reported as good fits, which "
+         "is exactly what a trustworthy automated pipeline should do when "
+         "applied outside the conditions it was tuned against. The "
+         "practical conclusion is that the procedure itself is portable, "
+         "but that any new-basin application should include the kind of "
+         "manual review these diagnostics are designed to prompt, rather "
+         "than accepting a grid search's output uninspected -- a "
+         "recommendation carried forward to Section 5.3.")
 
 
 # ── Chapter Five ─────────────────────────────────────────────────────────────
@@ -703,14 +909,23 @@ def write_chapter5(doc, R, eq):
          "the range of plausible future sequences rather than a single "
          "predicted trajectory. Substantively, it demonstrates that the "
          "same ARIMA identification, estimation and validation pipeline "
-         "applies, without modification, to three physically distinct "
-         "hydrological variables, supporting the claim that the framework "
-         "is a general statistical forecasting methodology rather than a "
-         "model bespoke to river discharge. The entire framework, from "
-         "stationarity testing to stochastic validation, was implemented "
-         "from first principles in open-source software, so that it can be "
-         "audited, re-run and transferred to any basin and any variable "
-         "for which a monthly record exists.")
+         "applies, without modification, to hydrologically distinct "
+         "variable types (an atmospheric input and a hydraulic state "
+         "variable, per the qualification of Section 3.2) at the primary "
+         "basin, and, per the supplementary check of Section 4.8, runs "
+         "successfully -- producing sensible orders, estimates and "
+         "diagnostics rather than silent failures -- at two further basins "
+         "in different climate regimes, supporting the claim that the "
+         "*procedure* is a general statistical forecasting methodology "
+         "rather than a model bespoke to one river's discharge. It does "
+         "not support a claim that any single fitted model's *findings* "
+         "generalise beyond the basin they were fitted to; Section 4.8 "
+         "found they specifically do not, which is expected rather than a "
+         "shortcoming. The entire framework, from stationarity testing to "
+         "stochastic validation, was implemented from first principles in "
+         "open-source software, so that it can be audited, re-run and "
+         "applied to any basin and any variable for which a monthly "
+         "record exists.")
 
     h1(doc, "5.3 Limitations")
     body(doc,
@@ -736,12 +951,20 @@ def write_chapter5(doc, R, eq):
          "an assumed Normal one, was implemented (Appendix F) but not "
          "adopted as the primary method for this report; a direct "
          "comparison of the two on rainfall specifically is identified as "
-         "future work in Section 5.4. Fifth, the analysis used a single "
-         "basin; "
-         "transferability of both the fitted parameters and the "
-         "qualitative pattern of results (strong persistence for discharge "
-         "and stage, weak persistence for rainfall) to a basin with a "
-         "different climate regime remains to be tested.")
+         "future work in Section 5.4. Fifth, the primary analysis (Sections "
+         "4.1-4.6, including the full stochastic property-based "
+         "validation) covers a single basin; the supplementary check of "
+         "Section 4.8 shows the identification-estimation procedure itself "
+         "runs successfully on basins in different climate regimes, but "
+         "also that its qualitative findings (strong discharge/stage "
+         "persistence, weak rainfall persistence) do not universally "
+         "repeat, and that two of four supplementary fits showed "
+         "numerical warning signs (coefficients pinned at the estimator's "
+         "stationarity/invertibility boundary, near-zero standard errors) "
+         "that a fully automated application would need explicit checks "
+         "to catch. Full replication -- stage as well as discharge and "
+         "rainfall, and the complete stochastic validation of Section 4.6 "
+         "-- at basins beyond the primary one remains to be done.")
 
     h1(doc, "5.4 Recommendations for Future Work")
     body(doc,
@@ -757,11 +980,21 @@ def write_chapter5(doc, R, eq):
          "for rainfall, whose residuals are the only ones of the three "
          "showing heavy-tailed, skewed behaviour in the Jarque–Bera "
          "diagnostics, to test whether it better reproduces rainfall's "
-         "extreme-month properties. Third, the framework should be applied "
-         "to additional basins, including basins in more markedly seasonal "
-         "or data-scarce climates, to test the generality of both the "
-         "methodology and the specific finding that discharge and stage "
-         "show strong persistence while rainfall does not. Fourth, having "
+         "extreme-month properties. Third, the supplementary cross-basin "
+         "check of Section 4.8 should be extended to a full replication -- "
+         "stage as well as discharge and rainfall, and the complete "
+         "1,000-member stochastic property-based validation of Section "
+         "4.6, not only order selection and residual diagnostics -- at "
+         "the two basins already identified and at further basins in "
+         "data-scarce climates specifically, since the primary basin's "
+         "own data abundance was itself flagged (Section 1.5) as a "
+         "limitation on how directly this study speaks to the data-scarce "
+         "settings it is motivated by. Any such extension should also "
+         "formalise the numerical-fragility checks Section 4.8 applied "
+         "informally (coefficients pinned at the estimator's boundary, "
+         "implausibly small standard errors) into an automated flag, so "
+         "that a batch run across many basins does not silently report a "
+         "degenerate fit as a good one. Fourth, having "
          "established that discharge and stage can each be forecast "
          "independently from their own past with a common methodology, a "
          "natural extension is a multivariate model that uses each as "

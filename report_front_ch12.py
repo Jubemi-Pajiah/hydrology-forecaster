@@ -283,21 +283,23 @@ def write_chapter1(doc, eq):
          "aquifers — support domestic supply, irrigation, navigation, "
          "ecosystem health and industrial activity. The performance and safety "
          "of these systems are strongly influenced by the temporal variability "
-         "of river flow. In engineering practice, the ability to anticipate "
-         "near-future streamflow, over hours to days, is fundamental to flood "
-         "early warning, reservoir operation, the safety assessment of "
-         "hydraulic structures and emergency response planning.")
+         "of river flow. In engineering practice, the ability to characterise "
+         "how a river's discharge, rainfall and water level are likely to "
+         "vary over the coming months to years is fundamental to reservoir "
+         "operation, the design of hydraulic structures such as spillways, "
+         "and long-term water-resources planning.")
     body(doc,
          "Hydrological forecasting is the process of predicting future "
          "hydrological states, such as discharge, stage or reservoir inflow, "
          "from available observations. The forecast horizon may be short-term "
          "(from nowcasting to a few days), medium-term (weeks to months) or "
-         "seasonal. In many real-world applications, and especially in flood "
-         "response and day-to-day operational decisions, short-term "
-         "forecasting over one to three days is the most actionable horizon, "
-         "because it matches the time window available for issuing warnings, "
-         "adjusting reservoir releases, mobilising field teams and protecting "
-         "critical assets (World Meteorological Organization, 2011).")
+         "seasonal to multi-year. This study is concerned with the last of "
+         "these: monthly-timestep forecasting over horizons of months to "
+         "decades, the timescale relevant to reservoir sizing, spillway "
+         "design and long-term water-resources planning (World "
+         "Meteorological Organization, 2011), as distinct from the "
+         "hours-to-days timescale of operational flood early warning, which "
+         "is outside this study's scope.")
     body(doc,
          "Over the last few decades, advances in computing, numerical methods "
          "and software engineering have moved hydrological forecasting from "
@@ -384,9 +386,11 @@ def write_chapter1(doc, eq):
     h1(doc, "1.3 Aim and Objectives of the Study")
     body(doc,
          "The aim of this study is to design and develop a computer-based "
-         "hydrological forecasting system that predicts short-term river "
-         "discharge from the past values of discharge alone, and to evaluate "
-         "its forecast skill honestly against an established benchmark.")
+         "statistical forecasting framework that predicts monthly river "
+         "discharge, rainfall and stage, each from that variable's own past "
+         "values alone, and to evaluate the resulting forecasts honestly by "
+         "the statistical properties they reproduce, appropriate to their "
+         "stochastic nature.")
     body(doc, "The specific objectives are:", bold=True)
     for text in (
         "to design and implement, in the Python programming environment, a "
@@ -429,10 +433,18 @@ def write_chapter1(doc, eq):
          "transparent modelling in Python, so that every step from "
          "stationarity testing to stochastic validation can be audited, "
          "re-run and extended without licensing barriers. For adaptability, "
-         "the framework transfers to any basin, and to any variable, for "
-         "which a monthly record is available, since it requires no other "
-         "input — demonstrated here directly by applying it, unmodified, to "
-         "three physically distinct variables.")
+         "the identification-estimation-validation procedure requires no "
+         "input beyond a variable's own monthly record, and runs "
+         "unmodified on any such record: demonstrated directly within the "
+         "primary basin by applying it to three variables, and, as a "
+         "supplementary check (Section 4.8), by applying it without "
+         "modification to two further basins in climate regimes distinct "
+         "from the primary one. That check found the procedure itself "
+         "transfers — order selection, estimation and diagnostics complete "
+         "successfully on unfamiliar data — while the specific qualitative "
+         "pattern found at the primary basin does not universally repeat, "
+         "which is the expected and honest outcome for different basins "
+         "with different hydrology, not a failure of the method.")
     body(doc,
          "A further contribution is methodological. Because a stochastic "
          "model's individual forecasts are not meant to reproduce a single "
@@ -670,17 +682,25 @@ def write_chapter2(doc, eq):
          "prevents a handful of flood peaks from dominating parameter "
          "estimation.")
     body(doc,
-         "The transformation carries a consequence that is frequently "
-         "overlooked. Because the exponential function is convex, "
-         "exponentiating a forecast made on the logarithmic scale recovers the "
-         "median rather than the mean of the predictive distribution, and "
-         "therefore systematically under-estimates the expected discharge by "
-         "an amount that grows with the forecast variance. Duan (1983) "
-         "proposed a nonparametric smearing estimator to correct this "
-         "retransformation bias; under a log-normal assumption the "
-         "corresponding correction is an analytical factor involving the "
-         "forecast error variance. Chapter Three adopts the latter and uses "
-         "the former as a cross-check.")
+         "The transformation carries a consequence that matters for a "
+         "deterministic, single-valued forecast and is frequently "
+         "overlooked there. Because the exponential function is convex, "
+         "exponentiating a single point forecast made on the logarithmic "
+         "scale recovers the median rather than the mean of the predictive "
+         "distribution, and therefore systematically under-estimates the "
+         "expected value by an amount that grows with the forecast "
+         "variance. Duan (1983) proposed a nonparametric smearing estimator "
+         "to correct this retransformation bias, and an analytical "
+         "log-normal correction is available as an alternative. Chapter "
+         "Three does not use either: because this study forecasts by "
+         "generating a stochastic ensemble rather than a single point value "
+         "(Section 3.6), each ensemble member is exponentiated "
+         "individually and the ensemble mean is then a Monte Carlo estimate "
+         "of the true expected value, unbiased by construction without any "
+         "explicit correction term. The retransformation-bias problem this "
+         "section describes is real, but it is a problem for point "
+         "forecasting specifically, and the ensemble approach adopted here "
+         "sidesteps it rather than correcting for it after the fact.")
     body(doc,
          "The order of differencing is settled by formal hypothesis testing "
          "rather than by inspection. The Augmented Dickey–Fuller test "
@@ -756,25 +776,35 @@ def write_chapter2(doc, eq):
          "Knoben, Freer and Woods (2019) make the more fundamental point that "
          "an efficiency value is meaningful only relative to the benchmark "
          "implied by its denominator. For daily streamflow this matters "
-         "acutely. Because flow is highly autocorrelated, the naive "
+         "acutely: because flow is highly autocorrelated, the naive "
          "persistence forecast, which simply carries today's flow forward, "
          "attains a high efficiency in its own right, and a model may post an "
          "impressive efficiency while adding no information whatever. The "
-         "appropriate response is to score the model against persistence "
-         "directly by means of a skill score, defined as one minus the ratio "
-         "of the model's mean squared error to that of persistence. A positive "
-         "value demonstrates genuine added value; zero indicates none. This "
-         "study accordingly adopts the persistence skill score as its headline "
-         "measure and reports the efficiency alongside it.")
+         "conventional response, for a model that issues a single "
+         "deterministic forecast value at each lead time, is to score it "
+         "against persistence directly by means of a skill score, defined "
+         "as one minus the ratio of the model's mean squared error to that "
+         "of persistence.")
     body(doc,
-         "A second requirement of honest verification concerns the "
-         "evaluation protocol. Forecast skill must be assessed on a period "
-         "withheld entirely from model fitting, and by rolling-origin "
-         "evaluation, in which a forecast is issued from every day of that "
-         "period using only the information available up to that day. This "
-         "reproduces the conditions of genuine operational forecasting, in "
-         "which recent observations are always available but the future never "
-         "is.")
+         "This entire verification tradition — efficiency, skill score, "
+         "rolling-origin evaluation against a point-forecast benchmark — "
+         "presupposes that the model produces one forecast value to be "
+         "scored against one observed value. That precondition does not "
+         "hold for the stochastic models developed in this study "
+         "(Section 3.6): each model generates an ensemble of plausible "
+         "future sequences, not a single value, so there is no single "
+         "forecast to place in the numerator of an efficiency or skill-"
+         "score calculation without arbitrarily collapsing the ensemble to "
+         "one number and discarding the very information the stochastic "
+         "approach exists to represent. Section 2.8 develops the "
+         "alternative this study actually adopts: validation by the "
+         "statistical properties an ensemble reproduces, rather than by "
+         "scoring a single collapsed value against a single observed one. "
+         "The efficiency and skill-score literature reviewed above remains "
+         "the right standard for a deterministic point-forecasting model; "
+         "it is reviewed here because it motivated the property-based "
+         "alternative by showing what a benchmark-aware verification "
+         "standard should demand, not because this study computes it.")
 
     h1(doc, "2.8 Forecast Uncertainty and Error Growth with Lead Time")
     body(doc,
