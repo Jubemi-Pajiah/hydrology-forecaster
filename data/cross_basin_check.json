@@ -1,0 +1,124 @@
+{
+  "10023000": {
+    "label": "Great Basin (arid interior West)",
+    "region_folder": "16",
+    "record": [
+      "1986-10-01",
+      "2014-12-31"
+    ],
+    "discharge": {
+      "label": "discharge",
+      "n_train_months": 237,
+      "order": [
+        2,
+        1,
+        1
+      ],
+      "d": 1,
+      "phi": [
+        0.879,
+        -0.2172
+      ],
+      "phi_se": [
+        0.0925,
+        0.0677
+      ],
+      "theta": [
+        -0.8208
+      ],
+      "aic": -512.88,
+      "ljung_box_pvalue": 0.0,
+      "phi1_significant": true
+    },
+    "rainfall": {
+      "label": "rainfall",
+      "n_train_months": 237,
+      "order": [
+        3,
+        0,
+        2
+      ],
+      "d": 0,
+      "phi": [
+        0.509,
+        -0.999,
+        0.1678
+      ],
+      "phi_se": [
+        0.0634,
+        0.0238,
+        0.0624
+      ],
+      "theta": [
+        -0.3612,
+        0.999
+      ],
+      "aic": 335.8,
+      "ljung_box_pvalue": 0.1295,
+      "phi1_significant": true
+    }
+  },
+  "01013500": {
+    "label": "New England (humid continental, snow-influenced)",
+    "region_folder": "01",
+    "record": [
+      "1980-01-01",
+      "2014-12-31"
+    ],
+    "discharge": {
+      "label": "discharge",
+      "n_train_months": 294,
+      "order": [
+        3,
+        0,
+        2
+      ],
+      "d": 0,
+      "phi": [
+        -0.186,
+        0.3412,
+        -0.4168
+      ],
+      "phi_se": [
+        0.0001,
+        0.0,
+        0.0002
+      ],
+      "theta": [
+        0.9922,
+        -0.0445
+      ],
+      "aic": -212.13,
+      "ljung_box_pvalue": 0.0,
+      "phi1_significant": true
+    },
+    "rainfall": {
+      "label": "rainfall",
+      "n_train_months": 294,
+      "order": [
+        4,
+        0,
+        1
+      ],
+      "d": 0,
+      "phi": [
+        0.7666,
+        0.04,
+        -0.082,
+        -0.122
+      ],
+      "phi_se": [
+        0.12,
+        0.0738,
+        0.0737,
+        0.062
+      ],
+      "theta": [
+        -0.6841
+      ],
+      "aic": -403.57,
+      "ljung_box_pvalue": 0.2964,
+      "phi1_significant": true
+    }
+  }
+}

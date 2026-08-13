@@ -1,0 +1,16 @@
+{
+  "n_reps": 500,
+  "trace_years": 30,
+  "n_pooled_annual_maxima": 15000,
+  "design_discharge_m3s_by_return_period": {
+    "2": 48.9,
+    "5": 96.38,
+    "10": 142.65,
+    "25": 216.83,
+    "50": 287.83,
+    "100": 375.6
+  },
+  "historical_annual_max_observed_mean": 52.57,
+  "historical_annual_max_observed_max": 109.73,
+  "historical_annual_max_n_years": 35
+}
