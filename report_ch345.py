@@ -405,7 +405,7 @@ def write_chapter3(doc, R, figures_dir, eq):
          "test evidence for the chosen differencing order, and the full "
          "property-based validation table. Figure 4 shows this panel for "
          "discharge, reproducing the same coefficient and validation values "
-         "reported in Tables 6 and 8.")
+         "reported in Tables 5 and 7.")
     figure(doc, figures_dir / "Fig8_AppCoefficients.png",
            "Figure 4: The application's 'For the curious' panel for "
            "discharge, showing the estimated AR/MA coefficients with "
