@@ -52,51 +52,62 @@ def write_title_page(doc):
 
 
 def write_abstract(doc, R):
-    f1 = R["forecast"]["1"]["model"]
+    dis = R["variables"]["discharge"]
+    rain = R["variables"]["rainfall"]
+    stage = R["variables"]["stage"]
     front_heading(doc, "ABSTRACT", page_break=False)
     body(doc,
          "Hydrological forecasting underpins flood preparedness, reservoir "
-         "operation and sustainable water resources planning. Many operational "
-         "forecasting systems nevertheless remain out of reach in data-limited "
-         "settings, because they demand meteorological forcing, spatial "
-         "catchment data, extensive parameter calibration and, frequently, "
-         "proprietary software. This study develops and evaluates a purely "
-         "statistical, computer-based framework for short-term river-discharge "
-         "forecasting that depends on the discharge record alone. Future flow "
-         "is predicted from the past values of flow itself using the class of "
+         "operation and sustainable water resources planning. Many "
+         "operational forecasting systems nevertheless remain out of reach "
+         "in data-limited settings, because they demand meteorological "
+         "forcing, spatial catchment data, extensive parameter calibration "
+         "and, frequently, proprietary software. This study develops and "
+         "evaluates a purely statistical, computer-based framework for "
+         "monthly hydrological forecasting that depends on each variable's "
+         "own past record alone. Three independent univariate models — for "
+         "discharge, rainfall and stage — are identified, estimated and "
+         "validated by an identical procedure, using the class of "
          "autoregressive integrated moving average (ARIMA) models formalised "
-         "by Box and Jenkins, so that no rainfall, temperature, "
-         "evapotranspiration or routing information is required at any stage. "
-         "The framework is implemented from first principles in Python, "
-         "comprising modules for data pre-processing, stationarity testing, "
-         "model identification, parameter estimation, forecast generation and "
-         "performance evaluation. The methodology is demonstrated on "
-         "thirty-five years of daily discharge (1980-2014) for the Conecuh "
-         "River at United States Geological Survey gauge 02361000, drawn from "
-         "the CAMELS data set. The log-transformed series was differenced once "
-         "on the joint evidence of the Augmented Dickey-Fuller and "
-         "Kwiatkowski-Phillips-Schmidt-Shin tests, and the model order was "
-         "selected objectively by an iterative grid search minimising the "
-         "Akaike Information Criterion, which identified "
-         f"{R['model']}. The model was estimated on the 1980-2003 training "
-         "period and evaluated by rolling-origin forecasts over the "
-         "independent 2004-2014 validation period, with forecasts "
-         "back-transformed using a log-normal bias correction. At a one-day "
-         f"lead time the model attained a Nash-Sutcliffe efficiency of "
-         f"{f1['NSE']:.3f}, a root-mean-square error of {f1['RMSE']:.2f} m3/s "
-         f"and a percentage bias of {f1['PBIAS']:.2f} per cent, and it "
-         "outperformed the naive persistence benchmark at every lead time, "
-         f"with persistence skill scores of {f1['PSS']:.3f}, "
-         f"{R['forecast']['2']['model']['PSS']:.3f} and "
-         f"{R['forecast']['3']['model']['PSS']:.3f} at one, two and three "
-         "days. Residual diagnostics confirmed the absence of significant "
-         f"short-lag autocorrelation (Ljung-Box p = "
-         f"{R['ljung_box']['pvalue']:.3f}). The study demonstrates that a "
-         "parsimonious, open-source and fully reproducible statistical "
-         "approach yields skilful short-range discharge forecasts without "
-         "recourse to costly modelling platforms or dense meteorological "
-         "monitoring, and provides an honest benchmark against which more "
-         "elaborate models should be judged.")
+         "by Box and Jenkins, so that no cross-variable input, meteorological "
+         "forecast or routing information is required at any stage. The "
+         "framework is implemented from first principles in Python, "
+         "comprising modules for monthly data aggregation, stationarity "
+         "testing, model identification, parameter estimation with standard "
+         "errors, stochastic ensemble generation and property-based "
+         "validation. The methodology is demonstrated on thirty-five years "
+         f"of monthly data (1980-2014, {dis['n_months']} months) for the "
+         f"Conecuh River at United States Geological Survey gauge 02371500, "
+         f"drawn from the CAMELS data set and the USGS National Water "
+         f"Information System. Each log-transformed series was tested "
+         f"jointly by the Augmented Dickey-Fuller and "
+         f"Kwiatkowski-Phillips-Schmidt-Shin tests, and its order selected "
+         f"objectively by an iterative grid search minimising the Akaike "
+         f"Information Criterion, which identified {'ARIMA' + str(tuple(dis['order']))} "
+         f"for discharge, {'ARIMA' + str(tuple(rain['order']))} for rainfall, "
+         f"and {'ARIMA' + str(tuple(stage['order']))} for stage, each "
+         f"coefficient reported with its standard error. Rather than a "
+         f"single deterministic forecast, each fitted model generates an "
+         f"ensemble of 1,000 synthetic monthly sequences; validation over "
+         f"the independent 2004-2014 period compares the statistical "
+         f"properties of that ensemble — mean, variability, skewness, "
+         f"month-to-month persistence, seasonal amplitude, dry-spell "
+         f"duration and peak value — to the historical record, rather than "
+         f"a single forecast value to a single observed value, since a "
+         f"stochastic model's individual realisations are not meant to "
+         f"match a specific observed sequence. Discharge and rainfall "
+         f"reproduced all seven properties within the synthetic ensemble's "
+         f"90 per cent envelope; stage reproduced "
+         f"{stage['validation_n_within']} of {stage['validation_n_total']}, "
+         f"an honestly reported shortfall traced to residual seasonal "
+         f"structure not captured by the non-seasonal specification. The "
+         f"study demonstrates that a parsimonious, open-source and fully "
+         f"reproducible statistical framework, applied identically across "
+         f"physically distinct hydrological variables and validated by "
+         f"stochastic properties rather than point comparison, yields a "
+         f"coherent and largely successful account of monthly discharge, "
+         f"rainfall and stage without recourse to costly modelling "
+         f"platforms or dense meteorological monitoring.")
 
 
 def write_certification(doc):
@@ -193,7 +204,7 @@ TERMS = [
      "reported here in cubic metres per second."),
     ("Time series",
      "a sequence of observations of a variable recorded at successive, "
-     "equally spaced instants; here, daily mean discharge."),
+     "equally spaced instants; here, monthly discharge, rainfall or stage."),
     ("Autocorrelation",
      "the correlation of a time series with a lagged copy of itself, which "
      "measures how strongly present values depend on past values."),
@@ -215,16 +226,28 @@ TERMS = [
      "being predicted."),
     ("Persistence forecast",
      "the naive benchmark forecast that assumes no change, so that the "
-     "predicted flow equals the most recently observed flow."),
-    ("Rolling-origin evaluation",
-     "a walk-forward assessment in which a forecast is issued from every day "
-     "of the validation period using only the data available up to that day."),
+     "predicted flow equals the most recently observed flow; a reference "
+     "point in the wider literature (Section 2.7), not the validation "
+     "method adopted in this study."),
+    ("Stochastic ensemble",
+     "a set of independently generated synthetic sequences from a fitted "
+     "model, used here in place of a single deterministic forecast."),
+    ("Property-based validation",
+     "assessing a stochastic model by whether the statistical properties "
+     "(mean, variance, persistence, seasonality, extremes) of its synthetic "
+     "ensemble reproduce those of the historical record, rather than by "
+     "comparing individual forecast and observed values."),
     ("Validation",
      "independent testing of a fitted model on a period withheld from model "
      "fitting, in order to assess genuine predictive reliability."),
     ("Nash–Sutcliffe efficiency",
      "a statistical measure of the proportion of the observed variance that "
-     "is reproduced by a model."),
+     "is reproduced by a deterministic forecast; discussed in Section 2.7 as "
+     "part of the wider verification literature."),
+    ("Standard error",
+     "a measure of the statistical uncertainty of an estimated coefficient, "
+     "distinct from the coefficient's point estimate; reported for every "
+     "AR/MA coefficient in this study (Section 3.5)."),
 ]
 
 
@@ -368,19 +391,25 @@ def write_chapter1(doc, eq):
     for text in (
         "to design and implement, in the Python programming environment, a "
         "modular computational framework for univariate statistical "
-        "streamflow forecasting, comprising data pre-processing, model "
-        "identification, estimation, forecasting and evaluation;",
-        "to identify and estimate an appropriate ARIMA model for the daily "
-        "discharge series by following the Box–Jenkins procedure, using "
-        "formal stationarity tests to fix the order of differencing and an "
-        "information criterion to select the model order objectively;",
-        "to generate one-, two- and three-day-ahead forecasts and to evaluate "
-        "them out-of-sample against observed discharge over an independent "
-        "validation period;",
-        "to benchmark the model against the naive persistence forecast by "
-        "means of a persistence skill score, and to interpret its performance "
-        "using standard hydrological efficiency ratings; and",
-        "to verify the statistical adequacy of the fitted model through "
+        "hydrological forecasting, comprising monthly data aggregation, "
+        "model identification, estimation, stochastic ensemble generation "
+        "and property-based validation;",
+        "to identify and estimate, independently, an appropriate ARIMA "
+        "model for each of three monthly hydrological series — discharge, "
+        "rainfall and stage — by following the Box–Jenkins procedure, using "
+        "formal stationarity tests to fix each series' order of "
+        "differencing and an information criterion to select each model "
+        "order objectively;",
+        "to estimate a standard error for every coefficient of every "
+        "selected model, distinguishing the choice of model order from the "
+        "estimation of the model's actual parameters;",
+        "to generate, from each fitted model, an ensemble of synthetic "
+        "monthly sequences over an independent validation period, and to "
+        "evaluate that ensemble by the statistical properties it reproduces "
+        "— mean, variability, persistence, seasonality and extremes — "
+        "rather than by point-for-point comparison against the sequence "
+        "that was actually observed; and",
+        "to verify the statistical adequacy of each fitted model through "
         "residual diagnostics.",
     ):
         bullet(doc, text)
@@ -389,57 +418,66 @@ def write_chapter1(doc, eq):
     body(doc,
          "This study is significant in four respects. For engineering "
          "practice, it provides a structured and defensible workflow for "
-         "short-range flow forecasting that can support flood preparedness and "
-         "routine operational decisions in catchments where only a flow record "
-         "exists. For capacity development, it offers a compact educational "
-         "framework through which students of civil and environmental "
-         "engineering can learn computational hydrology, time-series "
-         "identification and the discipline of out-of-sample evaluation. For "
-         "accessibility and reproducibility, it promotes open and transparent "
-         "modelling in Python, so that every step from stationarity testing to "
-         "forecast verification can be audited, re-run and extended without "
-         "licensing barriers. For adaptability, the framework transfers to any "
-         "basin for which a daily discharge record is available, since it "
-         "requires no other input.")
+         "monthly hydrological forecasting that can support water-resources "
+         "planning, including reservoir and spillway sizing, in catchments "
+         "where only a variable's own record exists. For capacity "
+         "development, it offers a compact educational framework through "
+         "which students of civil and environmental engineering can learn "
+         "computational hydrology, time-series identification and the "
+         "discipline of out-of-sample, stochastic evaluation. For "
+         "accessibility and reproducibility, it promotes open and "
+         "transparent modelling in Python, so that every step from "
+         "stationarity testing to stochastic validation can be audited, "
+         "re-run and extended without licensing barriers. For adaptability, "
+         "the framework transfers to any basin, and to any variable, for "
+         "which a monthly record is available, since it requires no other "
+         "input — demonstrated here directly by applying it, unmodified, to "
+         "three physically distinct variables.")
     body(doc,
-         "A further contribution is methodological. Because daily flow is "
-         "highly autocorrelated, a naive forecast that simply assumes no "
-         "change already scores well on conventional efficiency measures. Any "
-         "claim of forecasting skill that is not tested against that benchmark "
-         "is therefore weakly supported. By adopting the persistence skill "
-         "score as its headline measure, this study establishes a reference "
-         "model and an evaluation standard against which more elaborate "
-         "forecasting schemes may fairly be judged.")
+         "A further contribution is methodological. Because a stochastic "
+         "model's individual forecasts are not meant to reproduce a single "
+         "observed trajectory, comparing one forecast to the one sequence "
+         "that happened to follow it conflates genuine model skill with the "
+         "specific random path realised. By validating instead against the "
+         "statistical properties an ensemble of synthetic sequences "
+         "reproduces relative to the historical record, this study "
+         "establishes an evaluation standard suited to the stochastic "
+         "nature of the model itself, and directly relevant to the "
+         "design applications, such as sizing a reservoir against a range "
+         "of plausible inflow sequences, that motivate stochastic "
+         "hydrological modelling in the first place.")
 
     h1(doc, "1.5 Scope of the Study")
     body(doc,
-         "This study concerns short-term forecasting of daily river discharge "
-         "using univariate statistical time-series modelling implemented in "
-         "Python. The framework operates on a daily time step and produces "
-         "forecasts at lead times of one to three days. Its scope covers data "
-         "pre-processing, stationarity testing, model identification and order "
-         "selection, parameter estimation, rolling-origin forecast generation, "
-         "back-transformation with bias correction, and performance "
-         "evaluation against a persistence benchmark.")
+         "This study concerns monthly forecasting of river discharge, "
+         "rainfall and stage using univariate statistical time-series "
+         "modelling implemented in Python. The framework operates on a "
+         "monthly time step and produces stochastic ensembles of synthetic "
+         "monthly sequences rather than single deterministic values. Its "
+         "scope covers monthly data aggregation, stationarity testing, "
+         "model identification and order selection, parameter estimation "
+         "with standard errors, stochastic ensemble generation, and "
+         "property-based validation against the historical record.")
     body(doc,
-         "The methodology is demonstrated on thirty-five years of daily "
-         "discharge for the Conecuh River at United States Geological Survey "
-         "gauge 02361000 in southern Alabama, United States, obtained from the "
-         "CAMELS data set. That catchment is treated purely as a demonstration "
-         "basin: the object of study is a transferable forecasting "
-         "methodology, not a location-specific water resources problem. A "
-         "long, continuous and quality-controlled record was chosen so that "
-         "the method could be assessed under well-observed conditions.")
+         "The methodology is demonstrated on thirty-five years of monthly "
+         "discharge, rainfall and stage for the Conecuh River at Brantley, "
+         "United States Geological Survey gauge 02371500, in southern "
+         "Alabama, United States, obtained from the CAMELS data set and the "
+         "USGS National Water Information System. That catchment is treated "
+         "purely as a demonstration basin: the object of study is a "
+         "transferable forecasting methodology, applicable across variable "
+         "types, not a location-specific water resources problem. A long, "
+         "continuous and quality-controlled record was chosen so that the "
+         "method could be assessed under well-observed conditions.")
     body(doc,
-         "The study deliberately excludes rainfall–runoff transformation, "
-         "unit-hydrograph routing and any use of rainfall, temperature or "
-         "evapotranspiration data, since the central premise under "
-         "investigation is that the discharge record alone is sufficient for "
-         "short-range forecasting. It also excludes fully distributed "
-         "modelling, sediment transport, water quality forecasting, "
-         "socio-economic flood impact assessment, and the construction of "
-         "probabilistic prediction intervals, the last of which is identified "
-         "as a direction for future work in Chapter Five.")
+         "The study deliberately excludes rainfall–runoff transformation "
+         "and unit-hydrograph routing — no variable is forecast from "
+         "another, each of the three models depends on that variable's own "
+         "past alone. It also excludes fully distributed modelling, "
+         "sediment transport, water quality forecasting, socio-economic "
+         "flood impact assessment, and explicit seasonal (SARIMA) "
+         "extensions, the last of which is identified as a direction for "
+         "future work in Chapter Five.")
 
 
 # ── Chapter Two ──────────────────────────────────────────────────────────────
@@ -580,13 +618,44 @@ def write_chapter2(doc, eq):
          "system.")
     body(doc,
          "The strength of this approach at short lead times is well "
-         "documented. Because daily flow is strongly autocorrelated, a small "
+         "documented. Because streamflow is strongly autocorrelated, a small "
          "number of parameters can capture most of the predictable structure, "
          "and the resulting model is both computationally trivial and "
          "statistically transparent. Its limitation is equally clear: a "
          "univariate model cannot anticipate an event that has not yet begun "
-         "to register in the river, so forecast skill decays as the lead time "
-         "extends beyond the memory of the catchment.")
+         "to register in the observed series, so forecast skill decays as "
+         "the lead time extends beyond the memory of the process.")
+    body(doc,
+         "The choice among these variants, and the further variant "
+         "ARIMAX, is not a matter of preference but of what the data and "
+         "the forecasting problem actually require, and is worth setting "
+         "out explicitly. A pure AR(p) model is appropriate when a series' "
+         "dependence on its own past is well summarised by a linear "
+         "combination of a few previous values, with no distinct pattern in "
+         "the shocks themselves; a pure MA(q) model is appropriate when the "
+         "series is better described as a moving window over recent random "
+         "disturbances than as persistence of level. The combined ARMA(p, "
+         "q) model, and its differenced extension ARIMA(p, d, q), are the "
+         "general cases that nest both as special cases (q = 0 or p = 0 "
+         "respectively) and are preferred whenever the sample "
+         "autocorrelation and partial autocorrelation functions do not "
+         "cut off cleanly at a low lag, which is the common situation for "
+         "hydrological series. ARIMAX extends ARIMA by adding one or more "
+         "exogenous predictor series — for example forecast rainfall used "
+         "to forecast discharge — and is the appropriate choice precisely "
+         "when a genuine, independently available exogenous driver exists "
+         "and is expected to improve on the variable's own past alone. This "
+         "study does not adopt ARIMAX: each of its three models forecasts "
+         "one variable from that same variable's own past only, by design "
+         "(Section 1.5), so there is no exogenous driver to add, and "
+         "introducing one would reintroduce exactly the meteorological-"
+         "input dependency the univariate approach is meant to avoid "
+         "(Section 1.1). Plain ARIMA, admitting the possibility that "
+         "p = 0 or q = 0 emerges from the data, is therefore the correct "
+         "member of the family for the problem as posed, and Section 3.5 "
+         "lets the order-selection procedure, not an a priori assumption, "
+         "decide which of AR, MA or the mixed ARMA form best fits each of "
+         "the three variables.")
 
     h1(doc, "2.5 Stationarity, Transformation and Differencing")
     body(doc,
@@ -723,6 +792,29 @@ def write_chapter2(doc, eq):
          "typically show markedly lower skill than one-day forecasts, and why "
          "the useful horizon of a discharge-only model is bounded by the "
          "memory of the catchment.")
+    body(doc,
+         "A separate and, for design applications, arguably more useful "
+         "tradition treats this same growth of uncertainty not as a problem "
+         "to be minimised but as the object of study. Stochastic hydrology "
+         "generates synthetic sequences from a fitted time-series model "
+         "specifically to characterise the range of futures a catchment "
+         "could plausibly produce, an approach with a long history in water "
+         "resources engineering (Matalas, 1967; Salas, Delleur, Yevjevich, "
+         "& Lane, 1980) and applied to reservoir and spillway design, where "
+         "the quantity of interest is the distribution of possible inflow "
+         "sequences a structure must be sized against, not a single "
+         "predicted trajectory. The natural evaluation standard for a "
+         "synthetic generator is correspondingly different from the "
+         "point-accuracy standard of Section 2.7: a generator is judged by "
+         "whether the statistical properties of its synthetic output — "
+         "mean, variance, skewness, autocorrelation, seasonal pattern, and "
+         "extremes such as drought duration and peak value — reproduce "
+         "those of the historical record, since any individual synthetic "
+         "trajectory is only one draw from the fitted process and is not "
+         "expected to match a specific observed sequence. This "
+         "property-based standard, rather than the rolling-origin, "
+         "point-comparison standard of Section 2.7, is the one adopted for "
+         "the stochastic ensembles generated in this study (Section 3.6).")
 
     h1(doc, "2.9 Computational Hydrology and Open-Source Implementation")
     body(doc,
@@ -748,24 +840,37 @@ def write_chapter2(doc, eq):
 
     h1(doc, "2.10 Research Gap")
     body(doc,
-         "Four gaps emerge from this review. First, a great many published "
-         "studies apply a specific model to a specific river without producing "
-         "a reusable framework, so that the computational effort is not "
-         "transferable. Second, there is limited emphasis on open-source, "
-         "modular architectures in which pre-processing, identification, "
-         "estimation, forecasting and evaluation are integrated within a "
-         "single reproducible pipeline. Third, and most consequentially, "
-         "short-range streamflow forecasts are frequently reported against "
-         "the Nash–Sutcliffe efficiency alone, without benchmarking "
-         "against persistence, so that the claimed skill cannot be "
-         "distinguished from the autocorrelation of the flow itself. Fourth, "
-         "the retransformation bias introduced by logarithmic modelling is "
-         "often left uncorrected, producing forecasts that under-estimate "
-         "discharge increasingly with lead time.")
+         "Five gaps emerge from this review. First, a great many published "
+         "studies apply a specific model to a specific river without "
+         "producing a reusable framework, so that the computational effort "
+         "is not transferable. Second, there is limited emphasis on "
+         "open-source, modular architectures in which pre-processing, "
+         "identification, estimation, simulation and evaluation are "
+         "integrated within a single reproducible pipeline. Third, "
+         "univariate time-series studies in hydrology are overwhelmingly "
+         "applied to discharge alone, with comparatively little published "
+         "work demonstrating the same identification-estimation-validation "
+         "procedure, unmodified, across physically distinct variables such "
+         "as rainfall and stage, so the claim that the ARIMA methodology "
+         "itself — rather than a fitted discharge model — is what "
+         "generalises is asserted more often than it is shown. Fourth, and "
+         "most consequentially for a model intended to be stochastic, many "
+         "studies validate against a single observed sequence using "
+         "point-accuracy measures such as the Nash–Sutcliffe efficiency, "
+         "which is the correct standard for a deterministic forecast but "
+         "conflates model skill with realised randomness when applied to a "
+         "model whose whole premise is that each run produces a different "
+         "plausible outcome (Section 2.8). Fifth, where model coefficients "
+         "are reported at all, they are frequently given without standard "
+         "errors, so a reader cannot judge which estimated parameters are "
+         "well identified by the data and which are not.")
     body(doc,
          "There is therefore a need for a generalised, modular forecasting "
          "architecture, implemented entirely in open-source software, "
-         "operating on the discharge record alone, and evaluated by "
-         "rolling-origin forecasting against an explicit persistence benchmark "
-         "with the retransformation bias properly corrected. This study "
+         "demonstrated identically across more than one hydrological "
+         "variable, reporting a standard error alongside every estimated "
+         "coefficient, and validated by the statistical properties its "
+         "stochastic output reproduces relative to the historical record, "
+         "rather than by point comparison against a single observed "
+         "sequence. This study "
          "addresses that need.")

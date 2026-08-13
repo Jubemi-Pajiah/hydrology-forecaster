@@ -86,6 +86,9 @@ REFERENCES = [
     "Box, G. E. P., & Jenkins, G. M. (1976). Time series analysis: Forecasting "
     "and control (Rev. ed.). Holden-Day.",
 
+    "Box, G. E. P., Jenkins, G. M., & Reinsel, G. C. (2008). Time series "
+    "analysis: Forecasting and control (4th ed.). Wiley.",
+
     "Brockwell, P. J., & Davis, R. A. (2016). Introduction to time series and "
     "forecasting (3rd ed.). Springer.",
 
@@ -147,6 +150,14 @@ REFERENCES = [
     "MacKinnon, J. G. (1996). Numerical distribution functions for unit root "
     "and cointegration tests. Journal of Applied Econometrics, 11(6), 601–618.",
 
+    "Matalas, N. C. (1967). Mathematical assessment of synthetic hydrology. "
+    "Water Resources Research, 3(4), 937–945. "
+    "https://doi.org/10.1029/WR003i004p00937",
+
+    "McKinney, W. (2010). Data structures for statistical computing in "
+    "Python. Proceedings of the 9th Python in Science Conference, 56–61. "
+    "https://doi.org/10.25080/Majora-92bf1922-00a",
+
     "Moriasi, D. N., Arnold, J. G., Van Liew, M. W., Bingner, R. L., Harmel, "
     "R. D., & Veith, T. L. (2007). Model evaluation guidelines for systematic "
     "quantification of accuracy in watershed simulations. Transactions of the "
@@ -201,11 +212,12 @@ def appendix_listings():
     model = SRC / "model.py"
     return [
         ("APPENDIX-A",
-         "Loading the discharge record, the logarithmic transform, and the "
-         "training and validation split (src/preprocess.py).",
+         "Loading and monthly aggregation of the three series (discharge, "
+         "rainfall, stage), the logarithmic transform, and the training and "
+         "validation split (src/preprocess.py).",
          imports_of(SRC / "preprocess.py") + "\n\n\n"
-         + extract(SRC / "preprocess.py", "load_discharge", "log_transform",
-                   "inv_log_transform", "build_dataset", "split_dataset")),
+         + extract(SRC / "preprocess.py", "log_transform", "inv_log_transform",
+                   "monthly_aggregate", "build_monthly_dataset", "split_monthly")),
 
         ("APPENDIX-B",
          "Stationarity testing: the Augmented Dickey–Fuller and "
@@ -223,9 +235,11 @@ def appendix_listings():
         ("APPENDIX-D",
          "Estimation of the ARIMA(p, d, q) coefficients by conditional sum of "
          "squares, with pure autoregressive models solved exactly by ordinary "
-         "least squares (src/model.py).",
+         "least squares, and the standard error of every estimated "
+         "coefficient (src/model.py).",
          extract(model, "difference", "integrate_forecasts") + "\n\n\n"
-         + extract_methods(model, "ARIMA", ["_css_resid", "_unpack", "fit"])),
+         + extract_methods(model, "ARIMA",
+                           ["_css_resid", "_unpack", "fit", "standard_errors"])),
 
         ("APPENDIX-E",
          "Model identification: choosing the order of differencing from the "
@@ -235,22 +249,20 @@ def appendix_listings():
          extract(SRC / "calibrate.py", "choose_differencing", "select_order")),
 
         ("APPENDIX-F",
-         "Forecast generation: the psi-weight forecast error variance, the "
-         "recursive multi-step forecast, the rolling-origin evaluation, and "
-         "the log-normal bias correction (src/model.py and src/forecast.py).",
-         extract_methods(model, "ARIMA",
-                         ["_psi_weights", "kstep_logvar", "smearing_factor",
-                          "_forecast_diff", "rolling_kstep"])
-         + "\n\n\n"
-         + extract(SRC / "forecast.py", "forecast_evaluation",
-                   "residual_diagnostics")),
+         "Stochastic ensemble generation: simulating synthetic monthly "
+         "sequences from a fitted model's own estimated parameters and "
+         "error variance (src/simulate.py).",
+         imports_of(SRC / "simulate.py") + "\n\n\n"
+         + extract(SRC / "simulate.py", "_simulate_w", "simulate_ensemble")),
 
         ("APPENDIX-G",
-         "Performance metrics: Nash–Sutcliffe efficiency, root-mean-square "
-         "error, percentage bias, mean absolute error, coefficient of "
-         "determination and the persistence skill score (src/metrics.py).",
-         extract(SRC / "metrics.py", "nse", "rmse", "pbias", "mae", "r2",
-                 "persistence_skill_score", "moriasi_rating")),
+         "Property-based validation: summarising a monthly series by seven "
+         "hydrologically meaningful statistics and comparing a synthetic "
+         "ensemble's distribution of each to the historical record "
+         "(src/validation.py).",
+         imports_of(SRC / "validation.py") + "\n\n\n"
+         + extract(SRC / "validation.py", "series_properties",
+                   "compare_ensemble_to_historical")),
     ]
 
 
@@ -264,7 +276,8 @@ def write_appendix(doc):
          "produced the results reported in Chapter Four. They are presented in "
          "the order in which the pipeline executes them: data preparation, "
          "stationarity testing, correlation diagnostics, parameter "
-         "estimation, order selection, forecasting and evaluation.")
+         "estimation, order selection, stochastic ensemble generation and "
+         "property-based validation.")
 
     for label, caption, code in appendix_listings():
         appendix_heading(doc, label, caption)
