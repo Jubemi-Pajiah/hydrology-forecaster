@@ -43,6 +43,7 @@ BLUE = "#2563EB"
 AMBER = "#F59E0B"
 GREEN = "#16A34A"
 RED = "#DC2626"
+BG = "#F8FAFC"
 SURFACE = "#EFF6FF"
 BORDER = "#E2E8F0"
 GRAY = "#64748B"
@@ -169,14 +170,21 @@ st.markdown(
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
     html, body, [class*="css"] {{ font-family: 'Raleway', system-ui, sans-serif; color: {NAVY}; }}
+    .stApp {{ background: radial-gradient(1200px 600px at 15% -10%, #DBEAFE55 0%, transparent 60%),
+                          radial-gradient(1000px 500px at 100% 0%, #E9D5FF44 0%, transparent 55%),
+                          {BG}; }}
     .block-container {{ padding-top: 1.6rem; max-width: 1760px; }}
-    h1 {{ font-weight: 800 !important; color: {NAVY} !important; letter-spacing: -0.02em; margin-bottom:0 !important; }}
+    h1 {{ font-weight: 800 !important; letter-spacing: -0.02em; margin-bottom:0 !important;
+         background: linear-gradient(100deg, {NAVY} 30%, {BLUE} 100%);
+         -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }}
     h3 {{ font-weight: 700 !important; color: {NAVY} !important; }}
     [data-testid="stSidebar"] {{ display: none; }}
 
-    .rail-card {{ background: white; border: 1px solid {BORDER}; border-radius: 14px;
-                  padding: 1.1rem 1.2rem; margin-bottom: 1rem; }}
-    .rail-card h4 {{ margin: 0 0 0.5rem 0; font-size: 0.82rem; font-weight: 700; color: {GRAY};
+    .rail-card {{ background: linear-gradient(165deg, #FFFFFF 0%, #F8FAFF 100%);
+                  border: 1px solid {BORDER}; border-top: 3px solid {BLUE};
+                  border-radius: 14px; padding: 1.1rem 1.2rem; margin-bottom: 1rem;
+                  box-shadow: 0 4px 18px rgba(37,99,235,0.07); }}
+    .rail-card h4 {{ margin: 0 0 0.5rem 0; font-size: 0.82rem; font-weight: 700; color: {BLUE};
                      text-transform: uppercase; letter-spacing: 0.06em; }}
     .rail-card p, .rail-card li {{ font-size: 0.88rem; line-height: 1.55; color: #334155; margin: 0.3rem 0; }}
     .rail-fact {{ display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.3rem 0;
@@ -185,18 +193,35 @@ st.markdown(
 
     .controls {{ background: white; border: 1px solid {BORDER}; border-radius: 16px;
                  padding: 1.1rem 1.3rem; margin-bottom: 1.1rem; }}
+    [data-testid="stVerticalBlockBorderWrapper"] > div:first-child {{
+        background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFF 100%);
+    }}
 
     div.stButton > button[kind="primary"] {{
-        background: {BLUE}; border: none; font-weight: 700; font-size: 1.0rem;
-        border-radius: 12px; padding: 0.6rem 1.4rem; box-shadow: 0 4px 14px rgba(37,99,235,0.28);
+        background: linear-gradient(135deg, {BLUE} 0%, #0EA5E9 100%);
+        border: none; color: white; font-weight: 700; font-size: 1.0rem;
+        border-radius: 12px; padding: 0.6rem 1.5rem;
+        box-shadow: 0 6px 18px rgba(37,99,235,0.38), 0 1px 2px rgba(37,99,235,0.25);
         transition: transform 150ms ease, box-shadow 150ms ease;
     }}
     div.stButton > button[kind="primary"]:hover {{
-        transform: translateY(-1px); box-shadow: 0 6px 18px rgba(37,99,235,0.36);
+        transform: translateY(-2px); box-shadow: 0 10px 26px rgba(37,99,235,0.46);
+    }}
+    div.stButton > button[kind="secondary"] {{
+        background: linear-gradient(180deg, #FFFFFF 0%, #F0F5FE 100%);
+        border: 1.5px solid #DBEAFE; color: {NAVY}; font-weight: 600;
+        border-radius: 10px; transition: all 150ms ease;
+    }}
+    div.stButton > button[kind="secondary"]:hover {{
+        border-color: {BLUE}; color: {BLUE};
+        background: linear-gradient(180deg, #EFF6FF 0%, #DBEAFE 100%);
+        box-shadow: 0 4px 14px rgba(37,99,235,0.2); transform: translateY(-1px);
     }}
 
     .card {{ background: white; border: 1px solid {BORDER}; border-radius: 14px;
-             padding: 0.95rem 1.05rem; margin-bottom: 0.9rem; }}
+             padding: 0.95rem 1.05rem; margin-bottom: 0.9rem;
+             transition: transform 150ms ease, box-shadow 150ms ease; }}
+    .card:hover {{ transform: translateY(-1px); }}
     .card-head {{ display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }}
     .card-title {{ font-size: 0.92rem; font-weight: 700; color: {NAVY}; margin: 0; }}
     .big-stat {{ font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 1.55rem;
@@ -205,8 +230,11 @@ st.markdown(
              letter-spacing: 0.04em; padding: 0.18rem 0.5rem; border-radius: 99px; margin: 0.15rem 0.3rem 0 0; }}
     .narrative {{ font-size: 0.87rem; line-height: 1.6; color: #334155; margin-top: 0.7rem; }}
 
-    [data-testid="stExpander"] {{ border: 1px solid {BORDER}; border-radius: 12px; }}
-    [data-testid="stVerticalBlockBorderWrapper"] {{ height: 100%; }}
+    [data-testid="stExpander"] {{ border: 1px solid {BORDER}; border-left: 3px solid {BLUE};
+                                  border-radius: 12px; background: #FFFFFF; }}
+    [data-baseweb="tab-highlight"] {{ background-color: {BLUE} !important; height: 3px !important; }}
+    [data-baseweb="tab"][aria-selected="true"] {{ color: {BLUE} !important; font-weight: 700; }}
+    [data-testid="stSliderThumbValue"], .stSlider [role="slider"] {{ background-color: {BLUE} !important; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -472,7 +500,8 @@ with right:
             o = outputs[v]
             record_word, record_color = track_record_word(o["n_ok"], o["n_tot"])
             st.markdown(
-                f"""<div class="card">
+                f"""<div class="card" style="border-left:4px solid {VAR_COLOR[v]};
+                     box-shadow:0 4px 20px {VAR_COLOR[v]}26;">
                 <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p>
                     <span class="pill" style="background:{record_color};color:white;margin-left:auto;">
                         {o['n_ok']}/{o['n_tot']} &nbsp;{record_word.split()[0]}</span>
@@ -499,7 +528,8 @@ with right:
             n_ok, n_tot = r["validation_n_within"], r["validation_n_total"]
             record_word, record_color = track_record_word(n_ok, n_tot)
             st.markdown(
-                f"""<div class="card">
+                f"""<div class="card" style="border-left:4px solid {VAR_COLOR[v]};
+                     box-shadow:0 4px 20px {VAR_COLOR[v]}26;">
                 <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p>
                     <span class="pill" style="background:{record_color};color:white;margin-left:auto;">
                         {n_ok}/{n_tot} &nbsp;{record_word.split()[0]}</span>
