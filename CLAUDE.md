@@ -45,6 +45,7 @@ finals_project/
 │   │      (front matter + Ch 1-5 + References + code Appendix, on the Civil template)
 │   ├── Chapter3_4_5_Hydrological_Forecasting.docx   (superseded: Ch 3-5 only)
 │   ├── Project_Overview.pdf                          (overview + defence-prep Q&A)
+│   ├── Project_Overview.docx                         (same content as PROJECT_OVERVIEW.md, .docx form)
 │   ├── PROJECT TEMPLATE_Civil.docx                   (departmental template)
 │   ├── 190402003_ benedict ugbodaga (2).docx         (author's Ch 1-3 draft, superseded)
 │   └── README.md                                     (what to send + WPS export steps)
@@ -65,7 +66,10 @@ finals_project/
 │   ├── report_front_ch12.py      front matter, Chapter One, Chapter Two
 │   └── report_ch345.py           Chapters Three, Four, Five
 ├── write_document.py          ← builds the older Ch 3-5-only .docx into documents/ (superseded, still runnable)
-├── make_overview_pdf.py       ← builds the overview + Q&A PDF into documents/
+├── make_overview_pdf.py       ← builds the overview + Q&A PDF into documents/ (own hand-authored content,
+│                                  not derived from PROJECT_OVERVIEW.md -- keep both in sync by hand)
+├── make_overview_docx.py      ← mechanically converts PROJECT_OVERVIEW.md itself into documents/
+│                                  Project_Overview.docx, so this one *can't* drift from the .md
 ├── cross_basin_check.py       ← supplementary: reruns identification+estimation, unmodified, on 2 more CAMELS
 │                                  basins → data/cross_basin_check.json (Report §4.8, Table 9)
 ├── cross_basin_figure.py      ← turns cross_basin_check.json into Fig9_CrossBasinCheck.png (Report Figure 9)
@@ -92,6 +96,7 @@ python run_pipeline.py        # all 3 models + ensembles + figures + data/result
 python write_full_report.py   # rebuild documents/Computer_Hydrological_Forecasting_Full_Report.docx
 python write_document.py      # rebuild the older Ch 3-5-only .docx (superseded, kept working)
 python make_overview_pdf.py   # rebuild documents/Project_Overview.pdf
+python make_overview_docx.py  # rebuild documents/Project_Overview.docx (from PROJECT_OVERVIEW.md)
 streamlit run app.py          # launch the web app ("River Outlook")
 ```
 Regeneration order matters: `run_pipeline.py` first (it refreshes `results.json` and the
