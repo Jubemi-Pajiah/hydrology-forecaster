@@ -16,5 +16,5 @@ docs_page = st.Page(
     icon=":material/menu_book:",
 )
 
-pg = st.navigation([forecast_page, docs_page])
+pg = st.navigation([forecast_page, docs_page], position="top")
 pg.run()
