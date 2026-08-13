@@ -66,6 +66,11 @@ finals_project/
 │   └── report_ch345.py           Chapters Three, Four, Five
 ├── write_document.py          ← builds the older Ch 3-5-only .docx into documents/ (superseded, still runnable)
 ├── make_overview_pdf.py       ← builds the overview + Q&A PDF into documents/
+├── cross_basin_check.py       ← supplementary: reruns identification+estimation, unmodified, on 2 more CAMELS
+│                                  basins → data/cross_basin_check.json (Report §4.8, Table 9)
+├── cross_basin_figure.py      ← turns cross_basin_check.json into Fig9_CrossBasinCheck.png (Report Figure 9)
+├── design_discharge_example.py ← worked reservoir/spillway design-discharge example from pooled synthetic
+│                                  annual maxima → data/design_discharge_example.json (Report §4.6, Table 8)
 ├── app.py + pages/            ← Streamlit web app: "River Outlook" (0_Forecast.py) + "How This Works" (1_Documentation.py)
 ├── render.yaml                ← Render.com deploy config (needs app.py at repo root)
 ├── requirements.txt
@@ -73,8 +78,11 @@ finals_project/
 │   ├── results.json                    ← per-variable model + validation results (consumed by docs and app)
 │   ├── conecuh_discharge.csv           ← cached discharge, force-tracked in git
 │   ├── conecuh_rainfall.csv            ← cached rainfall (daymet/maurer/nldas cols), force-tracked in git
-│   └── conecuh_gage_height_raw.csv     ← cached stage, force-tracked in git
-├── figures/                   ← Fig1–Fig6 PNGs (embedded into the thesis)
+│   ├── conecuh_gage_height_raw.csv     ← cached stage, force-tracked in git
+│   ├── cross_basin_check.json          ← output of cross_basin_check.py
+│   └── design_discharge_example.json   ← output of design_discharge_example.py
+├── figures/                   ← Fig1–Fig9 PNGs (embedded into the thesis); Fig7/Fig8 are app screenshots
+│                                  (retaken from the live app, not model output), Fig9 is the cross-basin figure
 └── basin_timeseries_v1p2_metForcing_obsFlow.zip  ← raw CAMELS archive (3.4 GB, source data)
 ```
 
@@ -92,8 +100,15 @@ figures), then the document generators, which read `results.json`.
 ## The full report (documents/…Full_Report.docx)
 - Formatted to `documents/PROJECT TEMPLATE_Civil.docx`: A4, 2 cm margins, Times New
   Roman 12 pt double-spaced, **two heading levels only** (the template forbids a third),
-  table titles above tables, figure captions below figures, sequential Figure 1–6 /
-  Table 1–8, APA 6 references with hanging indents, equations numbered flush right.
+  table titles above tables, figure captions below figures, sequential Figure 1–9 /
+  Table 1–9, APA 6 references with hanging indents, equations numbered flush right.
+  Figures 3/4 are screenshots of the live app (Fig7_AppDashboard.png /
+  Fig8_AppCoefficients.png on disk — filenames don't match caption numbers, re-take
+  these from the app whenever its UI changes materially). Figure 9 and Table 9
+  (Section 4.8) are the supplementary cross-basin check; Table 8 (Section 4.6) is the
+  design-discharge worked example — added 2026-08-13 in response to two rounds of
+  independent critical review, see PROJECT_OVERVIEW.md's "What was added on
+  2026-08-13" section for the full list of what was fixed vs. deliberately deferred.
 - **Chapters 1–2 have been rewritten twice.** First to replace the superseded
   rainfall-runoff framing with the ARIMA one. Then again on 2026-08-12/13 for the
   monthly/3-variable/stochastic pivot — Chapter 2 now includes an explicit

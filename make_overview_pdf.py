@@ -231,6 +231,24 @@ def build():
         "ARIMA approach on the same supervisor's instruction, and is not revisited "
         "here -- see CLAUDE.md and archive/ for that history if needed.")
 
+    pdf.h2("The report was then put through two rounds of critical review")
+    pdf.body(
+        "After the pivot above, the thesis text was independently reviewed twice "
+        "(each round: three reviewer personas instructed to challenge why, how, and "
+        "where every claim came from, not just skim the document). Real, checkable "
+        "problems came out of both rounds. A table-numbering gap, a data-vs-text "
+        "arithmetic mismatch, and two backwards test-result claims (ARCH and "
+        "Jarque-Bera) were fixed directly. Three deeper methodological gaps -- no "
+        "worked reservoir/spillway design example, an unsupported cross-basin "
+        "transfer claim, and an unstated discharge/stage independence caveat -- were "
+        "resolved with real supplementary analysis rather than softened wording (see "
+        "'On generalisation and design use' in Section 1). Three other requests -- "
+        "make the persistence skill score the headline metric, reintroduce an "
+        "explicit Duan bias-correction step, and drop the qualification on the "
+        "cross-basin claim -- were considered and declined, because each would have "
+        "reintroduced exactly the point-forecast framing the 2026-08-12 pivot moved "
+        "away from.")
+
     # ── 1. Questions to expect, and where the answer lives ──────────────────────
     pdf.add_page()
     pdf.h1(1, "Questions To Expect, And Where The Answer Lives")
@@ -342,8 +360,10 @@ def build():
         "already in hand, verified, and clean. The Nigerian request stayed open as "
         "a possible future swap. This is a disclosed trade-off, not a hidden one -- "
         "the thing actually being demonstrated is that the method generalises "
-        "across variables and would generalise across basins too, which does not "
-        "depend on which specific river supplied the numbers.",
+        "across variables at this basin; a supplementary check (Section 4.8 of the "
+        "report) has since tested whether the procedure also generalises across "
+        "basins, with an honest, qualified answer -- see 'On generalisation and "
+        "design use' below.",
         "Report Chapter 1, Section 1.5. See 'Why Conecuh, specifically' below for "
         "the full reasoning.")
 
@@ -377,6 +397,39 @@ def build():
         "open. Full detail, including a Beninese fallback option (AMMA-CATCH, free "
         "and no request needed) that was also scoped, is in the working document "
         "DATA_OPTIONS.md.")
+
+    pdf.h2("On generalisation and design use (added after the 2026-08-13 review rounds)")
+    pdf.qa(
+        "Does this actually transfer to other basins, or is it just this one?",
+        "The identical identification-and-estimation procedure was run, unmodified, "
+        "on two more CAMELS basins in climate regimes distinct from Conecuh's humid "
+        "subtropical setting -- the Great Basin (arid interior West) and New England "
+        "(humid continental, snow-influenced). It ran cleanly on both, for both "
+        "discharge and rainfall, without a single code change. What did not transfer "
+        "was the specific pattern found at Conecuh: discharge shows strong AR(1) "
+        "persistence at all three basins but fails its residual test at all three, "
+        "and rainfall persistence genuinely differs by basin -- near zero at "
+        "Conecuh, strong at the other two. Two of the four new fits also showed real "
+        "numerical warning signs (coefficients pinned at the optimiser's boundary, "
+        "standard errors essentially zero) -- evidence the pipeline's own diagnostics "
+        "catch bad fits rather than reporting them as good, which is the honest "
+        "reading of this result.",
+        "Report Chapter 4, Section 4.8 (Table 9, Figure 9); cross_basin_check.py, "
+        "cross_basin_figure.py.")
+    pdf.qa(
+        "You keep invoking reservoir and spillway design as the motivation -- can "
+        "you actually show a design number?",
+        "Yes, now. Five hundred synthetic 30-year discharge traces are generated "
+        "from the already-fitted discharge model; annual maximum monthly discharge "
+        "is pooled across all of them (15,000 values), and return-period design "
+        "discharges are read directly off that pooled distribution using the "
+        "standard plotting-position method (Chow, Maidment and Mays, 2008). The "
+        "100-year design discharge comes out to about 376 cubic metres per second, "
+        "against a 35-year observed peak of about 110. This is explicitly "
+        "illustrative -- a real design study would use a formally chosen "
+        "exceedance-probability standard and cross-check several methods -- but it "
+        "is a real, reproducible calculation, not just an invoked application.",
+        "Report Chapter 4, Section 4.6 (Table 8); design_discharge_example.py.")
 
     # ── 2. Very basic explanation ──────────────────────────────────────────────
     pdf.add_page()

@@ -818,6 +818,18 @@ def write_chapter4(doc, R, figures_dir, eq):
                             f"{r['ljung_box_pvalue']:.3f}"])
         table(doc, ["Basin", "Variable", "Model", "d", "phi_1 significant?",
                     "Ljung-Box p"], rows, font_pt=9)
+    figure(doc, figures_dir / "Fig9_CrossBasinCheck.png",
+           "Figure 9: AR(1) coefficient (95% confidence interval, from each "
+           "model's own standard errors) for discharge and rainfall at the "
+           "primary Conecuh basin and the two supplementary basins, coloured "
+           "by whether that fit's Ljung-Box residual test passes. The same "
+           "numbers as Table 9, shown visually: discharge shows AR(1) "
+           "persistence at all three basins but fails its Ljung-Box "
+           "residual test at all three too, while rainfall passes its "
+           "Ljung-Box test everywhere yet its AR(1) coefficient varies "
+           "sharply by basin, from statistically indistinguishable from "
+           "zero at Conecuh to strong, significant persistence at the "
+           "Great Basin and New England.", width=Cm(16.5))
     body(doc,
          "The procedure completed successfully on both basins for both "
          "variables without any code change: it identified a differencing "

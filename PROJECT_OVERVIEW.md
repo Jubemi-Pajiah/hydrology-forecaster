@@ -54,6 +54,67 @@ Everything below describes the project **after** both of these changes.
 
 ---
 
+## 🔍 What was added on 2026-08-13 (two rounds of critical review)
+
+After the pivot above, the thesis text was put through **two independent rounds of
+critical review** (three simulated professor-reviewer agents each round, asked to
+challenge "why", "how", and "where did this come from" across the whole document, not
+just skim it). Real, checkable problems came out of both rounds, and each was either
+fixed directly or deliberately deferred and disclosed — not silently dropped:
+
+**Fixed directly** — a Table 8 arithmetic error (text said 13/21 property checks passed;
+the data said 20/21); a missing "Table 1" caused by an earlier deletion, which had
+silently shifted every later table number by one; an ARCH-test paragraph that had
+rainfall and stage's borderline p-values backwards; a Jarque–Bera paragraph that claimed
+normality was rejected for "every variable" when the data show only rainfall's residuals
+actually fail that test.
+
+**Resolved with new work, not just edited text** — three specific methodological gaps
+were raised twice, independently, by different reviewer angles, and each got a real
+supplementary analysis rather than a rewording:
+
+- *"Reservoir/spillway sizing is the motivating application but never once demonstrated
+  with an actual calculation."* → A worked design-discharge example now exists: 500
+  synthetic 30-year discharge traces, pooled annual maxima, empirical return-period
+  discharges read off the pooled distribution (the plotting-position method, Chow,
+  Maidment & Mays 2008) — e.g. a 100-year design discharge of ~376 m³/s, versus a 35-year
+  observed peak of ~110 m³/s. → *Report §4.6, Table 8; `design_discharge_example.py`.*
+- *"The framework 'transfers to any basin... demonstrated here directly' — but only one
+  basin was ever tested."* → The identical identification-and-estimation procedure was
+  run, unmodified, on two more CAMELS basins from different climate regimes (Great Basin,
+  arid; New England, humid continental/snow-influenced). The honest result: the
+  *procedure* runs cleanly everywhere, but the *specific findings* don't transfer —
+  discharge shows AR(1) persistence at all three basins but fails its residual test at
+  all three, and rainfall's persistence genuinely differs by basin (near-zero at Conecuh,
+  strong at New England). Two of the four new fits also showed real numerical warning
+  signs (boundary-pinned coefficients, near-zero standard errors) — evidence the
+  pipeline's own diagnostics work, not evidence to be swept under the rug. → *Report
+  §4.8, Table 9, Figure 9; `cross_basin_check.py`, `cross_basin_figure.py`.*
+- *"Discharge and stage are hydraulically linked (stage is discharge through a rating
+  curve) — that weakens the 'three independent variable types' claim."* → The report now
+  states this caveat directly next to the independence claim instead of leaving it
+  implicit. → *Report §3.2.*
+
+**Deliberately declined, not fixed** — the same review rounds asked, point-blank,
+whether to (1) make the persistence skill score the headline metric, (2) reintroduce an
+explicit Duan/log-normal bias-correction step, and (3) claim the method "transfers to any
+basin... demonstrated here directly" without qualification. All three were **declined**:
+the first two would have reintroduced exactly the point-forecast machinery the
+2026-08-12 pivot deliberately moved away from (the stochastic ensemble already handles
+log-normal bias by Monte Carlo integration, and property-based validation is the correct
+standard for a stochastic model, not a repackaged point-forecast score); the third would
+have been an overclaim the one-basin study didn't support — which is exactly what the
+new §4.8 supplementary check above replaces it with, honestly.
+
+**App and screenshots refreshed to match.** The Streamlit app's forecast controls were
+rebuilt around explicit "predict from [month/year] to [month/year]" fields with range
+presets, replacing an earlier "horizon from today" framing that couldn't express an
+arbitrary future window; a rendering bug that left the controls panel an empty bordered
+box was fixed; and a colour/shadow pass was applied for a more finished look. The two
+app screenshots in Chapter 3 (Figures 3 and 4) were retaken from the current app to match.
+
+---
+
 ## ❓ Questions to expect, and where the answer lives
 
 Every question below is one the supervisor has actually asked, in the defence session
@@ -143,6 +204,22 @@ verified against USGS NWIS, and clean across all three variables, so it became t
 working basin while the Nigerian request stayed open. A Beninese fallback (AMMA-CATCH —
 free, no request needed) was also scoped; see `DATA_OPTIONS.md` for the full breakdown.
 
+**On generalisation and design use (added after the 2026-08-13 review rounds)**
+
+- **"Does this actually transfer to other basins, or just this one?"** The identical
+  procedure was run, unmodified, on two more CAMELS basins in different climate regimes.
+  It runs cleanly everywhere; the *specific* findings (which order fits, whether
+  residuals pass) don't automatically carry over — reported honestly, not oversold. →
+  *Report §4.8, Table 9, Figure 9.*
+- **"You keep saying this is for reservoir/spillway design — show me a number."** A
+  worked example now exists: pooled synthetic annual maxima across 500 thirty-year
+  traces give return-period design discharges by the standard plotting-position method
+  (100-year ≈ 376 m³/s). → *Report §4.6, Table 8.*
+- **"Discharge and stage aren't really independent, are they?"** Correct, and now stated
+  directly — they're linked by the site's rating curve, which is a real limitation on
+  the "three independent variable types" framing, not something to gloss over. → *Report
+  §3.2.*
+
 ---
 
 ## 🧠 How it works (the science, simply)
@@ -204,9 +281,12 @@ would look clean.
 | `src/plots.py` | The 6 figures, rewritten for 3 variables x monthly x stochastic |
 | `run_pipeline.py` | The **"run everything" button** — loads all 3 variables, fits all 3 models, runs stochastic validation, saves `data/results.json` + all figures |
 | `app.py` + `pages/` | "River Outlook" — a 3-pane Streamlit dashboard (context left, controls/charts/story centre, compact per-variable cards right). One button forecasts all 3 variables at once; "For the curious" surfaces the AR/MA coefficients, standard errors, and stationarity evidence live |
-| `figures/` | 6 charts: monthly series (3-panel), ACF/PACF (3x2), ensemble vs. observed (3-panel), property validation (3-panel), residual diagnostics (3x2), parameter estimates with confidence intervals (3-panel) |
+| `figures/` | 9 charts: monthly series, ACF/PACF, ensemble vs. observed, property validation, residual diagnostics, parameter estimates with confidence intervals (all 3-variable panels), plus the two app screenshots and the cross-basin check figure |
 | `documents/Computer_Hydrological_Forecasting_Full_Report.docx` | The full Chapter 1–5 thesis, rewritten for the new methodology |
 | `write_full_report.py` (+ `report_front_ch12.py`, `report_ch345.py`, `report_lib.py`) | Generates the full report from `data/results.json`; the code appendix is extracted live from `src/*.py` so it can't drift from the code that produced the results |
+| `cross_basin_check.py` | Supplementary: reruns the identification/estimation procedure, unmodified, on two more CAMELS basins → `data/cross_basin_check.json` |
+| `cross_basin_figure.py` | Turns the cross-basin check into Figure 9 (AR(1) coefficients with 95% CI, coloured by Ljung-Box pass/fail) |
+| `design_discharge_example.py` | Worked reservoir/spillway design-discharge example from pooled synthetic annual maxima → `data/design_discharge_example.json` |
 
 ---
 
@@ -241,6 +321,20 @@ No external time-series modelling library (no `statsmodels`).
   methodology chapter around monthly/multi-variable/stochastic validation, rewrote the
   results chapter around the new figures and tables, and the code appendix
   auto-updated to include the two new modules (`simulate.py`, `validation.py`).
+- **Reviewed twice, independently.** Two rounds of critical review surfaced real
+  problems (a table numbering gap, a data-vs-text mismatch, two backwards test-result
+  claims) that are now fixed, plus three genuine methodological gaps (no reservoir/
+  spillway worked example, an unsupported cross-basin transfer claim, an unstated
+  discharge/stage independence caveat) that are now resolved with real supplementary
+  analysis (§4.6, §4.8, §3.2) rather than just softened language. See "What was added on
+  2026-08-13" above for the full list.
+- **Still open, disclosed rather than hidden:** the cross-basin check covers discharge
+  and rainfall only (not stage, which needs a live per-basin data pull) and stops at
+  order selection + diagnostics — it does not repeat the full 1,000-member stochastic
+  validation for the two extra basins; that full replication is future work (Report
+  §5.4). The design-discharge worked example is explicitly illustrative, not a
+  substitute for a real design study with a formally chosen exceedance-probability
+  standard.
 - **Not yet done:** the docx → PDF export is manual (WPS Writer, Ctrl+A then F9 to
   refresh the Table of Contents / List of Figures / List of Tables, then export) — this
   machine has no Word/LibreOffice, so that last step is on you.
