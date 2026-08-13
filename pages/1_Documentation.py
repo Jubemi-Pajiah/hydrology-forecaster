@@ -24,24 +24,24 @@ except Exception:
 st.markdown(
     f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600&display=swap');
-    html, body, [class*="css"] {{ font-family: 'Fira Sans', system-ui, sans-serif; color: {COLOR_TEXT}; }}
-    h1 {{ font-family: 'Fira Code', monospace; color: {COLOR_PRIMARY} !important; font-size: 1.85rem !important;
-         font-weight: 700 !important; border-bottom: 2px solid {COLOR_PRIMARY}; padding-bottom: 0.4rem; }}
-    h2 {{ color: {COLOR_TEXT} !important; font-size: 1.1rem !important; font-weight: 700 !important;
+    @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+    html, body, [class*="css"] {{ font-family: 'Raleway', system-ui, sans-serif; color: {COLOR_TEXT}; }}
+    h1 {{ font-weight: 800 !important; color: {COLOR_TEXT} !important; font-size: 1.9rem !important;
+         letter-spacing: -0.02em; }}
+    h2 {{ color: {COLOR_TEXT} !important; font-size: 1.05rem !important; font-weight: 700 !important;
          text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2rem !important;
          border-left: 3px solid {COLOR_PRIMARY}; padding-left: 0.6rem; }}
-    h3 {{ color: {COLOR_PRIMARY} !important; font-size: 1rem !important; font-weight: 600 !important;
+    h3 {{ color: {COLOR_PRIMARY} !important; font-size: 1rem !important; font-weight: 700 !important;
          margin-top: 1.25rem !important; }}
-    p, li {{ font-size: 0.95rem; line-height: 1.7; }}
-    code {{ font-family: 'Fira Code', monospace; background: {COLOR_SURFACE}; padding: 0.15em 0.45em;
-         border-radius: 4px; font-size: 0.88em; color: {COLOR_PRIMARY}; }}
+    p, li {{ font-size: 0.97rem; line-height: 1.7; }}
+    code {{ font-family: 'JetBrains Mono', monospace; background: {COLOR_SURFACE}; padding: 0.15em 0.45em;
+         border-radius: 4px; font-size: 0.85em; color: {COLOR_PRIMARY}; }}
     .block-container {{ max-width: 900px; padding-top: 1.25rem; padding-bottom: 3rem; }}
-    .callout {{ background: {COLOR_SURFACE}; border-left: 4px solid {COLOR_PRIMARY}; border-radius: 0 6px 6px 0;
-         padding: 0.85rem 1.1rem; margin: 1rem 0; font-size: 0.92rem; line-height: 1.65; }}
+    .callout {{ background: {COLOR_SURFACE}; border-left: 4px solid {COLOR_PRIMARY}; border-radius: 0 10px 10px 0;
+         padding: 0.9rem 1.15rem; margin: 1rem 0; font-size: 0.94rem; line-height: 1.65; }}
     .callout strong {{ color: {COLOR_PRIMARY}; }}
-    .eq-box {{ background: #F1F5F9; border: 1px solid {COLOR_BORDER}; border-radius: 6px; padding: 0.75rem 1.25rem;
-         margin: 0.6rem 0; font-family: 'Fira Code', monospace; font-size: 0.9rem; color: {COLOR_TEXT}; line-height: 1.9; }}
+    .eq-box {{ background: #F1F5F9; border: 1px solid {COLOR_BORDER}; border-radius: 10px; padding: 0.75rem 1.25rem;
+         margin: 0.6rem 0; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; color: {COLOR_TEXT}; line-height: 1.9; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.75rem 0; }}
     th {{ background: {COLOR_PRIMARY}; color: white; padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; }}
     td {{ padding: 0.45rem 0.75rem; border-bottom: 1px solid {COLOR_BORDER}; }}
@@ -54,19 +54,19 @@ st.markdown(
 variables = R.get("variables", {})
 basin = R.get("basin", "Conecuh River at Brantley, Alabama (USGS 02371500)")
 
-st.title("Documentation")
+st.title("How This Works")
 st.caption(
-    "Conecuh River Stochastic Forecaster  ·  "
-    "Civil & Environmental Engineering  ·  "
+    "River Outlook  ·  Conecuh River at Brantley, Alabama  ·  "
     "Ugbodaga Benedict Osikpemi  ·  2026"
 )
 
 st.markdown(
     """<div class="callout">
-    This page explains <strong>what the app does</strong>, the <strong>statistical method behind
-    it</strong>, and <strong>how to read the output</strong>. Three independent models forecast
-    discharge, rainfall, and stage, each from its own past monthly values only &mdash; there is
-    no cross-variable input, and no weather forecast is consumed.
+    <strong>In one sentence:</strong> we don't try to guess one exact number for next month's
+    river flow, rainfall, or water level &mdash; instead, we generate a thousand plausible
+    versions of the future and show you the range they land in, checked against 35 years of
+    real history. The rest of this page explains that in as much or as little detail as you
+    want: what the app does, the method behind it, and how to read what it shows you.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -250,21 +250,25 @@ happens to fall inside it.
 st.markdown("## 6. How to Use the App")
 st.markdown(
     """
-1. Go to the **Forecast Tool** page.
-2. In the sidebar choose a **variable** (discharge, rainfall, or stage), a **forecast
-   origin** month, a **horizon**, and the number of **synthetic replicates**.
-3. Press **Run Forecast**.
+1. Go to the **River Outlook** page.
+2. Choose **where to start from** (the end of the record, or an earlier month if you
+   want to also see what actually happened next) and **how far ahead to look**.
+3. Press **Get the Outlook** -- one click forecasts all three variables together.
 
-Because the model is stochastic, each click of **Run Forecast** generates a fresh random
-ensemble -- the exact synthetic paths will differ between runs, and that is expected, not
-a bug. Results show:
-- **Forecast Summary** -- the ensemble median and 90% band for each month.
-- **Forecast Table** -- dated forecast values with the 5th/95th percentile band.
-- **Stochastic Forecast chart** -- recent observed history with the synthetic band
-  and median appended, and (where available) the actual observed values for context.
-- **Property-Based Validation** -- how many of the seven summary statistics the model
-  reproduces within its ensemble's 90% envelope, computed once over the full validation
-  period.
+Because the model is stochastic, each click generates a fresh random ensemble -- the
+exact synthetic paths will differ between runs, and that is expected, not a bug. What
+you'll see:
+- **Three cards**, one per variable, each with a plain-English summary sentence, a
+  headline number, and two small tags: a trend (rising / falling / steady) and how the
+  level compares to what's typical.
+- **A chart per variable** showing recent history, the range of plausible futures, the
+  expected path through the middle of that range, and (where available) what actually
+  happened, for context.
+- **A "track record" tag** on each card, showing how many of seven statistical
+  properties the model's ensemble reproduces from the real 2004-2014 record -- the
+  honest measure of how much to trust it.
+- **A "for the curious" section** at the bottom with the full statistical detail
+  (model orders, coefficients, diagnostics) for anyone who wants it.
 """
 )
 
