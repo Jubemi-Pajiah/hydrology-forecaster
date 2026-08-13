@@ -6,13 +6,13 @@ import streamlit as st
 
 forecast_page = st.Page(
     "pages/0_Forecast.py",
-    title="Forecast Tool",
+    title="River Outlook",
     icon=":material/water_drop:",
     default=True,
 )
 docs_page = st.Page(
     "pages/1_Documentation.py",
-    title="Documentation",
+    title="How This Works",
     icon=":material/menu_book:",
 )
 
