@@ -156,11 +156,14 @@ def build_narrative(variable, unit, from_label, to_label, avg_val,
     return (
         f"We are forecasting <strong>{var_label}</strong> for the <strong>{BASIN_SHORT}</strong> "
         f"from <strong>{from_label}</strong> to <strong>{to_label}</strong>. Based on the "
-        f"result, we see {var_label} <strong>{trend_word}</strong>, averaging about "
-        f"<strong>{avg_val:.1f} {unit}</strong> &mdash; {level_word} the typical level of "
-        f"{hist_mean:.1f} {unit}. Our model's outlook has matched real historical patterns "
-        f"in <strong>{n_ok} of {n_total}</strong> key ways, so treat this as {confidence} "
-        f"guide, not a guarantee."
+        f"result, we see {var_label} <strong>{trend_word}</strong>, with a typical "
+        f"monthly level of about <strong>{avg_val:.1f} {unit}</strong> along the median "
+        f"of the 1,000 simulated runs &mdash; {level_word} the historical typical level "
+        f"of {hist_mean:.1f} {unit}. Across 11 years of held-out data, this model "
+        f"reproduced <strong>{n_ok} of {n_total}</strong> statistical properties of the "
+        f"real record inside its simulated range, so treat this as {confidence} guide to "
+        f"the <em>kind</em> of behaviour to plan for &mdash; not a prediction of what any "
+        f"individual month will actually do."
     )
 
 
@@ -280,6 +283,22 @@ with left:
         </div>""",
         unsafe_allow_html=True,
     )
+    st.markdown(
+        f"""<div class="rail-card" style="border-top-color:{AMBER};">
+        <h4 style="color:{AMBER};">How far ahead is fair?</h4>
+        <p>The maths lets this run to any year you ask for. That is not the same as it
+        being <strong>reliable</strong> that far out.</p>
+        <p>Every run assumes the river behaves like its 1980&ndash;2003 self forever.
+        Climate change, land-use change, a new reservoir, river engineering,
+        urbanisation, or a change to the gauge itself would each break that
+        assumption &mdash; and this model cannot represent any of them.</p>
+        <p>So read a long-range window as a <strong>synthetic scenario</strong> that is
+        consistent with this river's historical statistics &mdash; the sort of input a
+        reservoir or spillway sizing calculation needs &mdash; and not as a prediction
+        of the river in a given distant year.</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
     st.page_link("pages/1_Documentation.py", label="How the method works, in full")
 
 # ── CENTER: controls, then chart + story ─────────────────────────────────────
@@ -377,6 +396,18 @@ with center:
 
     if outputs:
         st.markdown(f"#### The picture behind the outlook &mdash; {from_label} to {to_label}")
+        years_out = display_to.year - last_month.year
+        if years_out > 25:
+            st.warning(
+                f"**Read this as a synthetic scenario, not a prediction.** "
+                f"{to_label} is about {years_out} years past the end of the record. "
+                f"The simulation assumes the river's statistical behaviour stays as it "
+                f"was in 1980–2003 — it cannot account for climate change, land-use "
+                f"change, new reservoirs, river engineering, urbanisation, or a change "
+                f"to the gauge. What it gives you is a sequence consistent with this "
+                f"river's historical statistics, which is what a design calculation "
+                f"needs; it is not a forecast of the river in a particular future year."
+            )
         gap_months = (display_from.year - last_month.year) * 12 + (display_from.month - last_month.month)
         show_hist = show_recent_history and gap_months <= 60
         tabs = st.tabs([VAR_LABEL[v] for v in ["discharge", "rainfall", "stage"]])
@@ -398,7 +429,7 @@ with center:
                 ).encode(
                     x="date:T", y="median:Q",
                     tooltip=[alt.Tooltip("date:T", title="Month", format="%b %Y"),
-                            alt.Tooltip("median:Q", title=f"Expected ({UNIT[v]})", format=".1f")],
+                            alt.Tooltip("median:Q", title=f"Median ({UNIT[v]})", format=".1f")],
                 )
                 layers = [band, median_line]
                 if show_hist:
@@ -418,8 +449,14 @@ with center:
                 if show_hist:
                     legend_bits.append(f'<span style="color:{NAVY}">&#9644;</span> Observed history (up to Dec 2014)')
                 legend_bits.append(f'<span style="color:{VAR_COLOR[v]}">&#9646;&#9646;</span> Uncertainty range (90%)')
-                legend_bits.append(f'<span style="color:{VAR_COLOR[v]}">- - -</span> Expected path')
+                legend_bits.append(f'<span style="color:{VAR_COLOR[v]}">- - -</span> Median path')
                 st.caption(" &nbsp;&nbsp; ".join(legend_bits), unsafe_allow_html=True)
+                st.caption(
+                    "The dashed line is the <strong>median</strong> across the simulated "
+                    "runs, not a single predicted path: each of the 1,000 runs is "
+                    "converted from the log scale back to natural units individually, "
+                    "and the median is taken afterwards, so no retransformation bias "
+                    "correction is needed.", unsafe_allow_html=True)
 
                 st.markdown(f'<div class="narrative">{build_narrative(v, UNIT[v], from_label, to_label, o["avg_val"], o["hist_mean"], o["trend_word"], o["level_word"], o["n_ok"], o["n_tot"])}</div>',
                            unsafe_allow_html=True)
@@ -429,6 +466,22 @@ with center:
                 "This is the part a supervisor or examiner actually wants to see: not just "
                 "*which* model was picked, but *how its numbers were estimated*, *how precisely* "
                 "they're known, and *what evidence* says this data fits an ARIMA model at all."
+            )
+            lb = {v: results["variables"][v]["diagnostics"]["ljung_box"]["pvalue"]
+                  for v in ["discharge", "rainfall", "stage"]}
+            st.info(
+                f"**The three models are not equally well specified — this matters.** A "
+                f"satisfactory ARIMA model should leave residuals resembling white noise. "
+                f"The Ljung–Box test asks whether autocorrelation remains in the residuals "
+                f"up to the tested lags; a small p-value rejects that null.\n\n"
+                f"- Rainfall: p = {lb['rainfall']:.4f} — **not rejected**, the cleanest fit "
+                f"of the three.\n"
+                f"- Discharge: p = {lb['discharge']:.4f} — **rejected**, structure remains.\n"
+                f"- Stage: p = {lb['stage']:.4f} — **rejected**, structure remains.\n\n"
+                f"Discharge and stage retain unexplained temporal structure, most likely "
+                f"seasonal, which a non-seasonal ARIMA does not absorb. This is reported "
+                f"as a limitation, not hidden, and it is the most likely reason stage "
+                f"misses one of its seven property checks."
             )
             for v in ["discharge", "rainfall", "stage"]:
                 o = outputs[v]
@@ -492,10 +545,12 @@ with right:
 
     if outputs:
         st.markdown(f"**Outlook summary**")
-        st.caption("The colored score on each card is how many of 7 real-world "
-                  "checks that variable's model passed against 11 years of "
-                  "held-out data &mdash; the closest thing this model has to "
-                  "an accuracy grade.", unsafe_allow_html=True)
+        st.caption("The colored score on each card counts how many of 7 statistical "
+                  "properties of the real 2004&ndash;2014 record fell inside the "
+                  "simulated 90% envelope. It is evidence of <strong>property "
+                  "reproduction</strong> &mdash; not point-forecast accuracy, not a "
+                  "percentage correct, and not the reliability of any individual "
+                  "future value.", unsafe_allow_html=True)
         for v in ["discharge", "rainfall", "stage"]:
             o = outputs[v]
             record_word, record_color = track_record_word(o["n_ok"], o["n_tot"])
@@ -518,10 +573,12 @@ with right:
             )
     else:
         st.markdown(f"**Typical levels**")
-        st.caption("Historical averages. The colored score on each card is how "
-                  "many of 7 real-world checks that variable's model passed "
-                  "against 11 years of held-out data &mdash; the closest thing "
-                  "this model has to an accuracy grade.", unsafe_allow_html=True)
+        st.caption("Historical averages. The colored score on each card counts how "
+                  "many of 7 statistical properties of the real 2004&ndash;2014 "
+                  "record fell inside the simulated 90% envelope. It is evidence of "
+                  "<strong>property reproduction</strong> &mdash; not point-forecast "
+                  "accuracy, and not the reliability of any individual future value.",
+                  unsafe_allow_html=True)
         for v in ["discharge", "rainfall", "stage"]:
             r = results["variables"][v]
             mean_val = r["historical_stats"]["mean"]

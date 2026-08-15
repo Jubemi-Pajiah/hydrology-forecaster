@@ -106,10 +106,7 @@ a time series using three ingredients:
 - **AR (autoregressive), order p** — the current value depends on its own *p* previous
   monthly values.
 - **I (integrated), order d** — the series is *differenced* *d* times to remove trend or
-  slow drift and make it stationary. (At a **daily** timestep, differencing gains almost
-  nothing for a river that never truly trends; at a **monthly** timestep it can remove
-  genuine seasonal drift where present -- part of why this project moved from a daily to a
-  monthly timestep.)
+  slow drift and make it stationary.
 - **MA (moving average), order q** — the current value depends on the *q* previous random
   shocks.
 
@@ -120,13 +117,60 @@ ARIMAX, deliberately: each variable is forecast from its own past only, by desig
 there is no exogenous driver to add.
 """
 )
+st.markdown("### What differencing does, and does not, do")
+st.markdown(
+    """
+This is worth stating precisely, because it is easy to overstate. Ordinary ARIMA
+differencing forms
+
+$$X_t - X_{t-1}$$
+
+which removes a **trend or slow drift in level**. It does *not*, by itself, remove an
+annual seasonal cycle. Removing an annual cycle from monthly data requires **seasonal
+differencing**,
+
+$$X_t - X_{t-12}$$
+
+or the seasonal terms of a **SARIMA** model.
+
+So the reason this project moved from a daily to a monthly timestep is narrower than
+"differencing removes the seasonality". Ordinary differencing of a daily river series
+gains little, because such a series does not genuinely trend over a single day. Monthly
+aggregation strips the short-term noise and **exposes** the annual cycle and any slow
+drift clearly enough that the differencing order *d* becomes a meaningful thing to test
+for. It does not turn ordinary differencing into a seasonal filter.
+
+What the stationarity tests actually selected for this basin was **d = 0** for all three
+variables, so these models do not difference the series at all. The seasonal structure
+that consequently remains in the discharge and stage residuals (Section 5) is an
+acknowledged reason to investigate SARIMA in future work.
+"""
+)
 st.markdown("### Working on log-transformed values")
 st.markdown(
     """
 Streamflow, rainfall, and stage are all strictly positive and right-skewed, with
 variability that grows with magnitude, so each model is fitted to the **natural
 logarithm** of its variable. This stabilises variance and stops a few extreme months
-from dominating the fit. Forecasts are converted back to natural units by exponentiation.
+from dominating the fit. Values are converted back to natural units by exponentiation.
+
+**The order of that back-transformation matters,** and is a standard source of bias
+worth being explicit about. Exponentiating a single *expected value* computed on the log
+scale does not give you the mean in natural units — because the exponential is convex,
+`exp(E[ln X])` estimates the **median** of X, not its arithmetic mean, and recovering
+the mean would require a retransformation correction (the log-normal factor
+`exp(σ²/2)`, or Duan's 1983 smearing estimator).
+
+No such correction is applied here, and none is needed, because this pipeline never
+exponentiates an expected value. Each of the 1,000 simulated sequences is exponentiated
+**individually**, and every reported statistic — means, percentiles, the 90% envelope,
+the seven validation properties — is computed afterwards on the natural-scale ensemble.
+Monte Carlo integration over the ensemble handles the log-normal skew automatically, so
+the ensemble mean is unbiased by construction. (Duan's smearing factor is still computed
+as a diagnostic and stored with the results, but it multiplies nothing.)
+
+Where the River Outlook page draws a single line through the band, that line is labelled
+as the ensemble **median**, because that is the quantity it is.
 """
 )
 st.markdown("### The model equation")
@@ -243,6 +287,24 @@ This is a stricter, more honest test than it might look: a wide synthetic envelo
 contains everything is not informative, so the envelope width itself (visible in the
 River Outlook charts) is part of what should be judged, not just whether the historical
 value happens to fall inside it.
+
+**What this score is not.** A result such as 7/7 means that seven selected historical
+properties fell within the simulated 90% envelopes. It is evidence of *property
+reproduction*. It is **not** point-forecast accuracy, **not** a percentage correct,
+**not** a prediction error, and **not** a statement about the reliability of any
+individual future value.
+
+**A stochastic forecast can still be compared with observations.** It would be too
+absolute to say that comparing simulations with real data is meaningless. What is
+inappropriate is judging a *single* random realisation as though it were a deterministic
+forecast — any one run carries no obligation to match the one sequence that happened.
+But the observation can legitimately be evaluated against the *full predictive
+distribution*, using prediction-interval coverage, the continuous ranked probability
+score (CRPS), the logarithmic score, calibration plots, rank histograms, or the Brier
+score for threshold exceedance. The property-based validation used here is one such
+distribution-level comparison, chosen because the properties it tests are the ones that
+govern water-resources design. The scores just listed are complementary to it, not ruled
+out by it, and are noted as future work in the report.
 """
 )
 
@@ -251,8 +313,9 @@ st.markdown("## 6. How to Use the App")
 st.markdown(
     """
 1. Go to the **River Outlook** page.
-2. Choose **where to start from** (the end of the record, or an earlier month if you
-   want to also see what actually happened next) and **how far ahead to look**.
+2. Set the range you want with **Predict from [month] [year] to [month] [year]**, or hit
+   one of the jump-to-range presets. The record ends December 2014, so every predictable
+   month is after that.
 3. Press **Get the Outlook** -- one click forecasts all three variables together.
 
 Because the model is stochastic, each click generates a fresh random ensemble -- the
@@ -261,12 +324,12 @@ you'll see:
 - **Three cards**, one per variable, each with a plain-English summary sentence, a
   headline number, and two small tags: a trend (rising / falling / steady) and how the
   level compares to what's typical.
-- **A chart per variable** showing recent history, the range of plausible futures, the
-  expected path through the middle of that range, and (where available) what actually
-  happened, for context.
+- **A chart per variable** showing recent history, the range of plausible futures, and
+  the ensemble **median** path through the middle of that range (a median, not a
+  prediction -- see "Working on log-transformed values" above).
 - **A "track record" tag** on each card, showing how many of seven statistical
-  properties the model's ensemble reproduces from the real 2004-2014 record -- the
-  honest measure of how much to trust it.
+  properties of the real 2004-2014 record fell inside the simulated 90% envelope. This
+  is evidence of property reproduction, not a forecast-accuracy percentage.
 - **A "for the curious" section** at the bottom with the full statistical detail
   (model orders, coefficients, diagnostics) for anyone who wants it.
 """
@@ -279,10 +342,11 @@ st.markdown(
 | Limitation | Implication |
 |-----------|-------------|
 | **Univariate per variable** | Each model uses only its own past; discharge cannot anticipate a rainfall event that has not yet reached the river. |
-| **Non-seasonal ARIMA** | No explicit seasonal (P, D, Q, 12) terms; some residual autocorrelation at seasonal lags remains for discharge and stage (visible in the Ljung-Box result), an acknowledged limitation rather than a hidden one. |
+| **Non-seasonal ARIMA** | No explicit seasonal (P, D, Q, 12) terms. Residuals should resemble white noise for a satisfactory fit; the Ljung-Box test **rejects** that for discharge and for stage (see Section 3 for the p-values) and does **not** reject it for rainfall. Rainfall therefore has the cleanest statistical fit of the three; discharge and stage retain unexplained temporal structure, most plausibly seasonal. Acknowledged, not hidden -- and the direct reason SARIMA is the leading item of future work. |
 | **Linear model** | Catchment response during extreme events is partly non-linear and not fully captured. |
 | **Gaussian innovations** | The synthetic ensembles draw innovations from a Normal distribution fitted to the residuals; residual diagnostics show heavier tails than Normal for some variables, so extreme-tail synthetic values may be somewhat under-dispersed. |
-| **Single basin** | Demonstrated on one basin; transfer to a different climate regime is untested. |
+| **Primary basin** | The full stochastic property-based validation covers this basin only. A supplementary check reran the identification and estimation procedure, unmodified, on two further CAMELS basins (one arid, one humid continental with snow) for discharge and rainfall: it ran cleanly on both, but its qualitative findings did not universally repeat, and two of the four extra fits showed numerical warning signs. So the *procedure* transfers; the *specific results* are not claimed to. Full replication -- stage included, with the complete 1,000-member validation -- at other basins remains to be done. |
+| **Long horizons are conditional** | The model is mathematically defined at any lead time, so the app will answer for any year you ask for. That is not the same as being reliable that far out: every run assumes the process estimated from 1980-2003 continues unchanged, which climate change, land-use change, reservoir construction, river engineering, urbanisation, or a change to the gauge would each break. Read long-range output as a **synthetic scenario** consistent with this river's historical statistics -- what a design calculation needs -- not as a prediction of the river in a given future year. |
 """
 )
 
