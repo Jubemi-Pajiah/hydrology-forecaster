@@ -107,6 +107,11 @@ REFERENCES = [
     "estimates of the variance of United Kingdom inflation. Econometrica, "
     "50(4), 987–1007. https://doi.org/10.2307/1912773",
 
+    "Gneiting, T., & Raftery, A. E. (2007). Strictly proper scoring rules, "
+    "prediction, and estimation. Journal of the American Statistical "
+    "Association, 102(477), 359–378. "
+    "https://doi.org/10.1198/016214506000001437",
+
     "Gupta, H. V., Kling, H., Yilmaz, K. K., & Martinez, G. F. (2009). "
     "Decomposition of the mean squared error and NSE performance criteria: "
     "Implications for improving hydrological modelling. Journal of Hydrology, "
@@ -134,6 +139,9 @@ REFERENCES = [
     "Inherent benchmark or not? Comparing Nash–Sutcliffe and Kling–Gupta "
     "efficiency scores. Hydrology and Earth System Sciences, 23(10), "
     "4323–4331. https://doi.org/10.5194/hess-23-4323-2019",
+
+    "Klemeš, V. (1974). The Hurst phenomenon: A puzzle? Water Resources "
+    "Research, 10(4), 675–688. https://doi.org/10.1029/WR010i004p00675",
 
     "Kwiatkowski, D., Phillips, P. C. B., Schmidt, P., & Shin, Y. (1992). "
     "Testing the null hypothesis of stationarity against the alternative of a "
@@ -212,12 +220,15 @@ def appendix_listings():
     model = SRC / "model.py"
     return [
         ("APPENDIX-A",
-         "Loading and monthly aggregation of the three series (discharge, "
-         "rainfall, stage), the logarithmic transform, and the training and "
-         "validation split (src/preprocess.py).",
+         "Loading and monthly aggregation of the series, the logarithmic "
+         "transform, the seasonal profile and the standardisation that "
+         "removes the annual cycle, and the training and validation split "
+         "(src/preprocess.py).",
          imports_of(SRC / "preprocess.py") + "\n\n\n"
          + extract(SRC / "preprocess.py", "log_transform", "inv_log_transform",
-                   "monthly_aggregate", "build_monthly_dataset", "split_monthly")),
+                   "seasonal_profile", "deseasonalise", "reseasonalise",
+                   "cycle_months", "monthly_aggregate", "build_monthly_dataset",
+                   "split_monthly")),
 
         ("APPENDIX-B",
          "Stationarity testing: the Augmented Dickey–Fuller and "
@@ -233,27 +244,35 @@ def appendix_listings():
                  "jarque_bera", "arch_test")),
 
         ("APPENDIX-D",
-         "Estimation of the ARIMA(p, d, q) coefficients by conditional sum of "
-         "squares, with pure autoregressive models solved exactly by ordinary "
-         "least squares, and the standard error of every estimated "
+         "The differencing operators, ordinary and seasonal, with their "
+         "inverses; and estimation of the ARIMA coefficients by conditional "
+         "sum of squares, with pure autoregressive models solved exactly by "
+         "ordinary least squares, and the standard error of every estimated "
          "coefficient (src/model.py).",
-         extract(model, "difference", "integrate_forecasts") + "\n\n\n"
+         extract(model, "difference", "integrate_forecasts",
+                 "seasonal_difference", "integrate_seasonal",
+                 "apply_differencing", "invert_differencing") + "\n\n\n"
          + extract_methods(model, "ARIMA",
-                           ["_css_resid", "_unpack", "fit", "standard_errors"])),
+                           ["_expand", "_css_resid", "_unpack", "fit",
+                            "standard_errors"])),
 
         ("APPENDIX-E",
-         "Model identification: choosing the order of differencing from the "
-         "stationarity tests, and selecting the model order by an iterative "
-         "grid search over the Akaike Information Criterion "
-         "(src/calibrate.py).",
-         extract(SRC / "calibrate.py", "choose_differencing", "select_order")),
+         "Model identification: measuring the strength of the annual cycle, "
+         "choosing the orders of differencing from the seasonality and "
+         "stationarity evidence, and selecting the model order by a grid "
+         "search over the Akaike Information Criterion (src/calibrate.py).",
+         extract(SRC / "calibrate.py", "seasonal_strength",
+                 "choose_seasonal_differencing", "choose_differencing",
+                 "select_order")),
 
         ("APPENDIX-F",
-         "Stochastic ensemble generation: simulating synthetic monthly "
-         "sequences from a fitted model's own estimated parameters and "
-         "error variance (src/simulate.py).",
+         "Synthetic record generation: simulating monthly sequences of "
+         "arbitrary length from a fitted model's own estimated parameters "
+         "and residuals, and restoring the annual cycle and natural units "
+         "(src/simulate.py).",
          imports_of(SRC / "simulate.py") + "\n\n\n"
-         + extract(SRC / "simulate.py", "_simulate_w", "simulate_ensemble")),
+         + extract(SRC / "simulate.py", "_simulate_w", "simulate_ensemble",
+                   "generate_synthetic_record")),
 
         ("APPENDIX-G",
          "Property-based validation: summarising a monthly series by seven "

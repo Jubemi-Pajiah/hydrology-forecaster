@@ -1,24 +1,27 @@
 """
-0_Forecast.py — Streamlit stochastic forecast dashboard.
+0_Forecast.py — Streamlit synthetic-record generator.
 
-Redesigned 2026-08-13 (v2) as a three-pane app shell: a static context rail
-on the left, the interactive controls/chart/story in the centre, and a
-compact outlook-card rail on the right -- rather than one narrow centred
-column, so the wide layout is actually used instead of fought.
+Rebuilt 2026-08-19 (v4). The app previously asked for a future date range
+("predict from X to Y") and displayed a band through it. That framing was
+wrong twice over. It implied the model predicts named future months, which
+it does not, and the date window was in any case statistically meaningless:
+the fitted process is stationary, so every window of a given length is
+identically distributed and slicing one out of the middle of a simulation
+returns the same thing as taking it from the start.
 
-Redesigned again 2026-08-13 (v3): controls are framed as a future date
-RANGE ("predict from X to Y"), not an "origin + horizon" -- the last real
-data point (Dec 2014) is purely an internal simulation anchor, never a
-concept the user has to think about.
+What the model actually does is generate a synthetic monthly record of
+whatever length is asked for, statistically consistent with the observed
+record but far longer, so that the rare events a design must survive appear
+often enough to be counted. The interface therefore asks for one number --
+how many years -- and returns the record itself, month by month, with the
+statistics a design calculation reads off it.
 
-A forecast here is an ENSEMBLE of synthetic monthly sequences, not a single
-point prediction -- re-running gives a different ensemble each time, which
-is the point: a stochastic model's individual forecasts aren't meant to be
-compared value-for-value against what actually happened, only its
-statistical properties are (see the Documentation page).
+Re-running gives a different record every time. That is the point: a
+stochastic model's individual realisations are not meant to be compared
+value-for-value with what actually happened, only its statistical
+properties are (see the Documentation page).
 """
 import sys
-import json
 from pathlib import Path
 
 import numpy as np
@@ -29,9 +32,11 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.preprocess import build_monthly_dataset
+import json
+
+from src.preprocess import build_monthly_dataset, deseasonalise
 from src.model import ARIMA
-from src.simulate import simulate_ensemble
+from src.simulate import generate_synthetic_record
 
 RESULTS_PATH = ROOT / "data" / "results.json"
 
@@ -44,98 +49,68 @@ AMBER = "#F59E0B"
 GREEN = "#16A34A"
 RED = "#DC2626"
 BG = "#F8FAFC"
-SURFACE = "#EFF6FF"
 BORDER = "#E2E8F0"
 GRAY = "#64748B"
 
-UNIT = {"discharge": "m3/s", "rainfall": "mm/month", "stage": "m"}
-VAR_LABEL = {"discharge": "River flow", "rainfall": "Rainfall", "stage": "River level"}
-VAR_COLOR = {"discharge": BLUE, "rainfall": "#0EA5E9", "stage": "#7C3AED"}
+VARIABLE = "discharge"
+UNIT = "m³/s"
+VAR_LABEL = "River flow"
 BASIN_SHORT = "Conecuh River"
 
-ICONS = {
-    "discharge": '<path d="M3 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0" stroke-linecap="round" stroke-linejoin="round"/>'
-                 '<path d="M3 10c2-2 4-2 6 0s4 2 6 0 4-2 6 0" stroke-linecap="round" stroke-linejoin="round"/>',
-    "rainfall": '<path d="M7 15a4 4 0 0 1 .5-7.97A5.5 5.5 0 0 1 18 9.5 3.5 3.5 0 0 1 17.5 16H7z"/>'
-                '<path d="M8 18l-1 2M12 18l-1 2M16 18l-1 2" stroke-linecap="round"/>',
-    "stage": '<path d="M6 3v18M6 3h3M6 8h3M6 13h3M6 18h3" stroke-linecap="round" stroke-linejoin="round"/>'
-             '<path d="M14 20l3-13 3 13" stroke-linecap="round" stroke-linejoin="round"/>',
-}
+MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+RETURN_PERIODS = [2, 5, 10, 25, 50, 100, 500]
 
 
-def svg_icon(name, color, size=22):
-    return (f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" '
-            f'stroke="{color}" stroke-width="1.8">{ICONS[name]}</svg>')
-
-
-# ── Data / model loading ────────────────────────────────────────────────────
-@st.cache_resource
+# ── Data and model ────────────────────────────────────────────────────────────
+@st.cache_data
 def load_results() -> dict:
     with open(RESULTS_PATH) as f:
         return json.load(f)
 
 
-@st.cache_resource
+@st.cache_data
 def load_monthly(variable: str):
     return build_monthly_dataset(variable)
 
 
 @st.cache_resource
-def fit_model(variable: str):
-    """Load the coefficients reported in the thesis rather than re-estimating
-    them (fitting on every cold start would be slow, and would silently fit
-    on the full record instead of the training-only coefficients reported)."""
-    results = load_results()
-    r = results["variables"][variable]
+def fit_model(variable: str = VARIABLE):
+    """Rebuild the model from the coefficients reported in the thesis.
+
+    The app never re-estimates anything: it loads the coefficients from the
+    same data/results.json that run_pipeline.py wrote, so what a user
+    generates here comes from exactly the model the report describes.
+    """
+    r = load_results()["variables"][variable]
+    fr = r["full_record"]
     df = load_monthly(variable)
-    order = tuple(r["order"])
-    return ARIMA.from_params(order, r["constant"], r["phi"], r["theta"],
-                             df["log_value"].to_numpy())
+    profile = fr["seasonal_profile"]
+    z = deseasonalise(df["log_value"].to_numpy(), df.index.month.to_numpy(), profile)
+    model = ARIMA.from_params(tuple(fr["order"]), fr["constant"],
+                              fr["phi"], fr["theta"], z)
+    return model, profile, fr
 
 
-# ── Narrative + classification helpers ──────────────────────────────────────
-def classify_trend(median_forecast, origin_value):
-    start = origin_value if origin_value else float(median_forecast[0])
-    tail = median_forecast[-3:] if len(median_forecast) >= 3 else median_forecast
-    end = float(np.mean(tail))
-    delta = (end - start) / start if start else 0.0
-    if abs(delta) < 0.08:
-        return "holding fairly steady", "steady"
-    return ("rising", "up") if delta > 0 else ("falling", "down")
-
-
-def classify_level(avg_val, hist_mean):
-    ratio = avg_val / hist_mean if hist_mean else 1.0
-    if ratio > 1.3:
-        return "well above", "attention"
-    if ratio > 1.1:
-        return "a bit above", "attention"
-    if ratio > 0.9:
-        return "right around", "normal"
-    if ratio > 0.7:
-        return "a bit below", "attention"
-    return "well below", "attention"
-
-
-def year_stepper(key, min_year, max_year, columns):
-    """A year dropdown (searchable, jump-to-any-year) flanked by -/+ buttons
-    (nudge by one). Buttons are rendered in their own columns before the
-    dropdown so their session_state writes happen before the dropdown widget
-    with the same key is instantiated -- Streamlit forbids writing to a
-    key after its widget exists in the same run."""
-    dec_col, mid_col, inc_col = columns
-    with dec_col:
-        dec_clicked = st.button("−", key=f"{key}_dec", use_container_width=True)
-    with inc_col:
-        inc_clicked = st.button("+", key=f"{key}_inc", use_container_width=True)
-    if dec_clicked:
-        st.session_state[key] = max(min_year, st.session_state[key] - 1)
-    if inc_clicked:
-        st.session_state[key] = min(max_year, st.session_state[key] + 1)
-    with mid_col:
-        st.selectbox("Year", list(range(min_year, max_year + 1)), key=key,
-                    label_visibility="collapsed")
-    return st.session_state[key]
+def return_period_table(record: np.ndarray, period: int = 12) -> pd.DataFrame:
+    """Design value for each return period, from the pooled annual maxima."""
+    n_years = record.shape[-1] // period
+    annual_max = record[:, :n_years * period].reshape(
+        record.shape[0], n_years, period).max(axis=2).ravel()
+    rows = []
+    for T in RETURN_PERIODS:
+        if annual_max.size < T:           # not enough years to speak to this T
+            continue
+        rows.append({
+            # Short headers on purpose: these three columns have to stay
+            # readable side by side in a narrow pane, and the design flow is
+            # the column that must never be the one that gets clipped.
+            "Return period": f"{T} yr",
+            "Chance/yr": f"{100.0 / T:.1f}%",
+            f"Design flow ({UNIT})": float(
+                np.percentile(annual_max, 100.0 * (1.0 - 1.0 / T))),
+        })
+    return pd.DataFrame(rows), annual_max
 
 
 def track_record_word(n_ok, n_total):
@@ -144,27 +119,6 @@ def track_record_word(n_ok, n_total):
     if n_ok >= 4:
         return "Reasonable track record", AMBER
     return "Weak track record", RED
-
-
-def build_narrative(variable, unit, from_label, to_label, avg_val,
-                    hist_mean, trend_word, level_word, n_ok, n_total):
-    """Fill-in-the-blanks narrative. Uses <strong> (not Markdown **bold**)
-    because it is always injected into a raw HTML block, where Markdown
-    syntax is not parsed."""
-    var_label = VAR_LABEL[variable].lower()
-    confidence = "a solid" if n_ok >= 6 else ("a reasonable" if n_ok >= 4 else "a rough")
-    return (
-        f"We are forecasting <strong>{var_label}</strong> for the <strong>{BASIN_SHORT}</strong> "
-        f"from <strong>{from_label}</strong> to <strong>{to_label}</strong>. Based on the "
-        f"result, we see {var_label} <strong>{trend_word}</strong>, with a typical "
-        f"monthly level of about <strong>{avg_val:.1f} {unit}</strong> along the median "
-        f"of the 1,000 simulated runs &mdash; {level_word} the historical typical level "
-        f"of {hist_mean:.1f} {unit}. Across 11 years of held-out data, this model "
-        f"reproduced <strong>{n_ok} of {n_total}</strong> statistical properties of the "
-        f"real record inside its simulated range, so treat this as {confidence} guide to "
-        f"the <em>kind</em> of behaviour to plan for &mdash; not a prediction of what any "
-        f"individual month will actually do."
-    )
 
 
 # ── Styling ───────────────────────────────────────────────────────────────────
@@ -193,12 +147,8 @@ st.markdown(
     .rail-fact {{ display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.3rem 0;
                   border-bottom: 1px dashed {BORDER}; }}
     .rail-fact b {{ color: {NAVY}; }}
-
-    .controls {{ background: white; border: 1px solid {BORDER}; border-radius: 16px;
-                 padding: 1.1rem 1.3rem; margin-bottom: 1.1rem; }}
-    [data-testid="stVerticalBlockBorderWrapper"] > div:first-child {{
-        background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFF 100%);
-    }}
+    .amber-card {{ border-top-color: {AMBER}; }}
+    .amber-card h4 {{ color: {AMBER}; }}
 
     div.stButton > button[kind="primary"] {{
         background: linear-gradient(135deg, {BLUE} 0%, #0EA5E9 100%);
@@ -222,13 +172,13 @@ st.markdown(
     }}
 
     .card {{ background: white; border: 1px solid {BORDER}; border-radius: 14px;
-             padding: 0.95rem 1.05rem; margin-bottom: 0.9rem;
-             transition: transform 150ms ease, box-shadow 150ms ease; }}
-    .card:hover {{ transform: translateY(-1px); }}
-    .card-head {{ display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }}
-    .card-title {{ font-size: 0.92rem; font-weight: 700; color: {NAVY}; margin: 0; }}
+             padding: 0.95rem 1.05rem; margin-bottom: 0.9rem; }}
+    .card-title {{ font-size: 0.92rem; font-weight: 700; color: {NAVY}; margin: 0 0 0.35rem 0; }}
     .big-stat {{ font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 1.55rem;
                  color: {NAVY}; margin: 0.1rem 0; }}
+    .stat-row {{ display: flex; justify-content: space-between; font-size: 0.86rem;
+                 padding: 0.32rem 0; border-bottom: 1px dashed {BORDER}; }}
+    .stat-row b {{ font-family: 'JetBrains Mono', monospace; color: {NAVY}; }}
     .pill {{ display: inline-block; font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
              letter-spacing: 0.04em; padding: 0.18rem 0.5rem; border-radius: 99px; margin: 0.15rem 0.3rem 0 0; }}
     .narrative {{ font-size: 0.87rem; line-height: 1.6; color: #334155; margin-top: 0.7rem; }}
@@ -237,362 +187,379 @@ st.markdown(
                                   border-radius: 12px; background: #FFFFFF; }}
     [data-baseweb="tab-highlight"] {{ background-color: {BLUE} !important; height: 3px !important; }}
     [data-baseweb="tab"][aria-selected="true"] {{ color: {BLUE} !important; font-weight: 700; }}
-    [data-testid="stSliderThumbValue"], .stSlider [role="slider"] {{ background-color: {BLUE} !important; }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 results = load_results()
-full_df = {v: load_monthly(v) for v in ["discharge", "rainfall", "stage"]}
-last_month = full_df["discharge"].index[-1]
-first_month = full_df["discharge"].index[0]
+R = results["variables"][VARIABLE]
+df_hist = load_monthly(VARIABLE)
+hist_values = df_hist["value"].to_numpy()
+n_hist_years = len(df_hist) // 12
 
-# ── Header (full width) ──────────────────────────────────────────────────────
 st.title("River Outlook")
-st.caption(f"{BASIN_SHORT} at Brantley, Alabama &nbsp;&middot;&nbsp; USGS 02371500 &nbsp;&middot;&nbsp; "
-          f"record: {first_month:%b %Y}–{last_month:%b %Y}", unsafe_allow_html=True)
-st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+st.caption(f"Synthetic monthly discharge records for the {BASIN_SHORT} at Brantley, "
+           f"Alabama (USGS 02371500) — generated from an ARIMA model fitted to "
+           f"{df_hist.index[0]:%Y}–{df_hist.index[-1]:%Y}.")
 
 left, center, right = st.columns([1, 2.35, 1.15], gap="medium")
 
-# ── LEFT rail: static context, doesn't change on interaction ────────────────
+# ── Left rail ─────────────────────────────────────────────────────────────────
 with left:
     st.markdown(
-        f"""<div class="rail-card"><h4>What this is</h4>
-        <p>Three separate statistical models &mdash; one each for river flow, rainfall and
-        river level &mdash; each learn only from that variable's own 35-year history, then
-        generate a thousand possible versions of what could happen next.</p>
-        <p>Nothing here is a single guaranteed number. It's a <strong>range of plausible
-        outcomes</strong>, which is the honest way to describe a river's future.</p>
-        </div>""",
-        unsafe_allow_html=True,
-    )
+        f"""
+        <div class="rail-card">
+          <h4>What this is</h4>
+          <p>The river has been measured for <b>{n_hist_years} years</b>. That is a short
+          sample, and the floods and droughts a dam or channel has to survive are
+          rarer than it is long.</p>
+          <p>This tool fits a statistical model to those {n_hist_years} years and uses
+          it to write out a <b>much longer record</b> — as many years as you ask for —
+          that behaves like the same river, but contains far more of the rare
+          events.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    lb = R["diagnostics"]["ljung_box"]["pvalue"]
     st.markdown(
-        f"""<div class="rail-card"><h4>Good to know</h4>
-        <div class="rail-fact"><span>Data ends</span><b>{last_month:%b %Y}</b></div>
-        <div class="rail-fact"><span>Years of history</span><b>35</b></div>
-        <div class="rail-fact"><span>Variables modelled</span><b>3, independently</b></div>
-        <div class="rail-fact"><span>Method</span><b>ARIMA (Box&ndash;Jenkins)</b></div>
-        <p style="margin-top:0.6rem;">Pick any future window you actually want &mdash;
-        2030 to 2035, 2050 to 2060, whatever. The model builds forward internally from
-        the last real measurement to get there; that's just plumbing, not something you
-        need to think about. The further out the window, the wider the plausible range
-        gets &mdash; that's the model being honest about how much less certain a
-        50-year-out guess is than a 1-year one, not a flaw.</p>
-        </div>""",
-        unsafe_allow_html=True,
-    )
+        f"""
+        <div class="rail-card">
+          <h4>Good to know</h4>
+          <div class="rail-fact"><span>Measured record</span>
+            <b>{df_hist.index[0]:%b %Y} – {df_hist.index[-1]:%b %Y}</b></div>
+          <div class="rail-fact"><span>Years of history</span><b>{n_hist_years}</b></div>
+          <div class="rail-fact"><span>Model</span><b>{R['label']}</b></div>
+          <div class="rail-fact"><span>Seasonal cycle</span><b>12 monthly parameters</b></div>
+          <div class="rail-fact"><span>Residual check</span><b>Ljung–Box p = {lb:.3f}</b></div>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown(
-        f"""<div class="rail-card" style="border-top-color:{AMBER};">
-        <h4 style="color:{AMBER};">How far ahead is fair?</h4>
-        <p>The maths lets this run to any year you ask for. That is not the same as it
-        being <strong>reliable</strong> that far out.</p>
-        <p>Every run assumes the river behaves like its 1980&ndash;2003 self forever.
-        Climate change, land-use change, a new reservoir, river engineering,
-        urbanisation, or a change to the gauge itself would each break that
-        assumption &mdash; and this model cannot represent any of them.</p>
-        <p>So read a long-range window as a <strong>synthetic scenario</strong> that is
-        consistent with this river's historical statistics &mdash; the sort of input a
-        reservoir or spillway sizing calculation needs &mdash; and not as a prediction
-        of the river in a given distant year.</p>
-        </div>""",
-        unsafe_allow_html=True,
-    )
-    st.page_link("pages/1_Documentation.py", label="How the method works, in full")
+        f"""
+        <div class="rail-card amber-card">
+          <h4>How to read the output</h4>
+          <p>The generated record is <b>not a forecast of particular months</b>. It is
+          not dated, and no row of it says what will happen in a given future year.</p>
+          <p>It is a <b>sample of the same river</b>, drawn out to whatever length you
+          need, so that the size of a 1-in-100-year flow can be counted rather than
+          guessed. Generate it twice and you get two different records — both equally
+          valid samples.</p>
+          <p>Estimates near the range of the measured record are the solid ones.
+          The further past it you read, the more the answer depends on the shape of
+          the model rather than on the river.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    st.page_link("pages/1_Documentation.py", label="How this works →")
 
-# ── CENTER: controls, then chart + story ─────────────────────────────────────
-MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
-              "August", "September", "October", "November", "December"]
-PRESETS = {
-    "2025 – 2030": (2025, "January", 2030, "January"),
-    "2030 – 2035": (2030, "January", 2035, "January"),
-    "2035 – 2045": (2035, "January", 2045, "January"),
-    "2045 – 2065": (2045, "January", 2065, "January"),
-}
-MIN_YEAR = last_month.year + 1  # the record ends 2014-12; every predictable month is after that
-
-st.session_state.setdefault("from_year", 2030)
-st.session_state.setdefault("from_month", "January")
-st.session_state.setdefault("to_year", 2035)
-st.session_state.setdefault("to_month", "January")
-
+# ── Centre: controls and results ──────────────────────────────────────────────
 with center:
     with st.container(border=True):
-        st.markdown("**Jump to a range**")
-        preset_cols = st.columns(len(PRESETS))
-        for col, (label, (fy, fm, ty, tm)) in zip(preset_cols, PRESETS.items()):
+        st.markdown("#### Generate a synthetic discharge record")
+
+        st.session_state.setdefault("n_years", 100)
+        p1, p2, p3, p4 = st.columns(4)
+        for col, yrs in zip((p1, p2, p3, p4), (30, 100, 500, 1000)):
             with col:
-                if st.button(label, use_container_width=True):
-                    st.session_state["from_year"] = fy
-                    st.session_state["from_month"] = fm
-                    st.session_state["to_year"] = ty
-                    st.session_state["to_month"] = tm
+                if st.button(f"{yrs:,} yr", use_container_width=True, key=f"preset{yrs}"):
+                    st.session_state["n_years"] = yrs
 
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns([2, 1])
         with c1:
-            st.markdown("**Predict from**")
-            fc1, fc2, fc3, fc4 = st.columns([1.3, 0.5, 1, 0.5])
-            with fc1:
-                from_month = st.selectbox("Month", MONTH_NAMES, key="from_month",
-                                          label_visibility="collapsed")
-            from_year = year_stepper("from_year", MIN_YEAR, 2200, (fc2, fc3, fc4))
+            n_years = st.number_input(
+                "Number of years to generate",
+                min_value=1, max_value=10000, step=10, key="n_years",
+                help="Any value from 1 to 10,000. The presets above are shortcuts.")
         with c2:
-            st.markdown("**to**")
-            tc1, tc2, tc3, tc4 = st.columns([1.3, 0.5, 1, 0.5])
-            with tc1:
-                to_month = st.selectbox("Month", MONTH_NAMES, key="to_month",
-                                        label_visibility="collapsed")
-            to_year = year_stepper("to_year", MIN_YEAR, 2200, (tc2, tc3, tc4))
+            n_reps = st.number_input(
+                "Independent records", min_value=1, max_value=100, value=20, step=1,
+                help="How many separate records to generate. The table shows the "
+                     "first; the statistics and return periods pool all of them.")
 
-        display_from = pd.Timestamp(year=st.session_state["from_year"],
-                                    month=MONTH_NAMES.index(st.session_state["from_month"]) + 1, day=1)
-        display_to = pd.Timestamp(year=st.session_state["to_year"],
-                                  month=MONTH_NAMES.index(st.session_state["to_month"]) + 1, day=1)
-        if display_to < display_from:
-            display_from, display_to = display_to, display_from
-        from_label = display_from.strftime("%B %Y")
-        to_label = display_to.strftime("%B %Y")
+        st.caption(f"{n_years:,} years = {n_years * 12:,} monthly values per record, "
+                   f"{n_years * n_reps:,} synthetic years in total.")
+        go = st.button("Generate synthetic record", type="primary")
 
-        with st.expander("Advanced settings"):
-            n_reps = st.slider("Synthetic replicates", 100, 1000, 400, 100,
-                               help="More replicates = smoother uncertainty bands, slower to compute.")
-            show_recent_history = st.checkbox(
-                "Show recent observed history alongside the forecast", value=True,
-                help="Only shown when the forecast window starts reasonably soon after "
-                     "the data ends -- otherwise the chart would be mostly empty space.")
-
-        go = st.button("Get the Outlook", type="primary")
-
-    outputs = {}
     if go:
-        full_horizon = (display_to.year - last_month.year) * 12 + (display_to.month - last_month.month)
-        window_start = (display_from.year - last_month.year) * 12 + (display_from.month - last_month.month)
-        with st.spinner(f"Running a thousand possible futures out to {to_label} for each variable..."):
-            for v in ["discharge", "rainfall", "stage"]:
-                df = full_df[v]
-                model = fit_model(v)
-                r = results["variables"][v]
-                ens_full = simulate_ensemble(model, df["log_value"].to_numpy(),
-                                             full_horizon, n_reps=n_reps, method="gaussian", seed=None)
-                ens = ens_full[:, window_start:]  # only the requested [from, to] window
-                fcst_dates = [display_from + pd.DateOffset(months=i) for i in range(ens.shape[1])]
-                q_median = np.median(ens, axis=0)
-                q_lo, q_hi = np.percentile(ens, [5, 95], axis=0)
+        model, profile, fr = fit_model()
+        with st.spinner(f"Generating {n_years:,} years…"):
+            record, months = generate_synthetic_record(
+                model, int(n_years), profile, n_reps=int(n_reps),
+                method=fr.get("innovations", "bootstrap"), seed=None, start_month=1)
+        st.session_state["record"] = record
+        st.session_state["months"] = months
+        st.session_state["gen_years"] = int(n_years)
+        st.session_state["gen_reps"] = int(n_reps)
 
-                avg_val = float(np.mean(q_median))
-                hist_mean = r["historical_stats"]["mean"]
-                trend_word, trend_dir = classify_trend(q_median, float(q_median[0]))
-                level_word, level_status = classify_level(avg_val, hist_mean)
-                n_ok, n_tot = r["validation_n_within"], r["validation_n_total"]
+    record = st.session_state.get("record")
 
-                outputs[v] = dict(
-                    df=df, fcst_dates=fcst_dates,
-                    q_median=q_median, q_lo=q_lo, q_hi=q_hi,
-                    avg_val=avg_val, hist_mean=hist_mean, trend_word=trend_word,
-                    trend_dir=trend_dir, level_word=level_word, level_status=level_status,
-                    n_ok=n_ok, n_tot=n_tot, r=r,
-                )
-
-    if outputs:
-        st.markdown(f"#### The picture behind the outlook &mdash; {from_label} to {to_label}")
-        years_out = display_to.year - last_month.year
-        if years_out > 25:
-            st.warning(
-                f"**Read this as a synthetic scenario, not a prediction.** "
-                f"{to_label} is about {years_out} years past the end of the record. "
-                f"The simulation assumes the river's statistical behaviour stays as it "
-                f"was in 1980–2003 — it cannot account for climate change, land-use "
-                f"change, new reservoirs, river engineering, urbanisation, or a change "
-                f"to the gauge. What it gives you is a sequence consistent with this "
-                f"river's historical statistics, which is what a design calculation "
-                f"needs; it is not a forecast of the river in a particular future year."
-            )
-        gap_months = (display_from.year - last_month.year) * 12 + (display_from.month - last_month.month)
-        show_hist = show_recent_history and gap_months <= 60
-        tabs = st.tabs([VAR_LABEL[v] for v in ["discharge", "rainfall", "stage"]])
-        for tab, v in zip(tabs, ["discharge", "rainfall", "stage"]):
-            o = outputs[v]
-            with tab:
-                fcst_df = pd.DataFrame({
-                    "date": o["fcst_dates"], "median": o["q_median"],
-                    "lo": o["q_lo"], "hi": o["q_hi"],
-                })
-
-                band = alt.Chart(fcst_df).mark_area(opacity=0.22, color=VAR_COLOR[v]).encode(
-                    x=alt.X("date:T", title=None),
-                    y=alt.Y("lo:Q", title=f"{VAR_LABEL[v]} ({UNIT[v]})"),
-                    y2="hi:Q",
-                )
-                median_line = alt.Chart(fcst_df).mark_line(
-                    strokeDash=[5, 3], color=VAR_COLOR[v], point=alt.OverlayMarkDef(color=VAR_COLOR[v]),
-                ).encode(
-                    x="date:T", y="median:Q",
-                    tooltip=[alt.Tooltip("date:T", title="Month", format="%b %Y"),
-                            alt.Tooltip("median:Q", title=f"Median ({UNIT[v]})", format=".1f")],
-                )
-                layers = [band, median_line]
-                if show_hist:
-                    hist = o["df"]["value"].loc[:last_month].iloc[-48:]
-                    hist_df = pd.DataFrame({"date": hist.index, "value": hist.values})
-                    hist_line = alt.Chart(hist_df).mark_line(color=NAVY, strokeWidth=1.8).encode(
-                        x="date:T", y="value:Q",
-                        tooltip=[alt.Tooltip("date:T", title="Month", format="%b %Y"),
-                                alt.Tooltip("value:Q", title=f"Observed ({UNIT[v]})", format=".1f")],
-                    )
-                    layers.insert(0, hist_line)
-
-                chart = alt.layer(*layers).properties(height=270).interactive()
-                st.altair_chart(chart, use_container_width=True)
-
-                legend_bits = []
-                if show_hist:
-                    legend_bits.append(f'<span style="color:{NAVY}">&#9644;</span> Observed history (up to Dec 2014)')
-                legend_bits.append(f'<span style="color:{VAR_COLOR[v]}">&#9646;&#9646;</span> Uncertainty range (90%)')
-                legend_bits.append(f'<span style="color:{VAR_COLOR[v]}">- - -</span> Median path')
-                st.caption(" &nbsp;&nbsp; ".join(legend_bits), unsafe_allow_html=True)
-                st.caption(
-                    "The dashed line is the <strong>median</strong> across the simulated "
-                    "runs, not a single predicted path: each of the 1,000 runs is "
-                    "converted from the log scale back to natural units individually, "
-                    "and the median is taken afterwards, so no retransformation bias "
-                    "correction is needed.", unsafe_allow_html=True)
-
-                st.markdown(f'<div class="narrative">{build_narrative(v, UNIT[v], from_label, to_label, o["avg_val"], o["hist_mean"], o["trend_word"], o["level_word"], o["n_ok"], o["n_tot"])}</div>',
-                           unsafe_allow_html=True)
-
-        with st.expander("For the curious: the statistics behind this outlook", expanded=False):
-            st.markdown(
-                "This is the part a supervisor or examiner actually wants to see: not just "
-                "*which* model was picked, but *how its numbers were estimated*, *how precisely* "
-                "they're known, and *what evidence* says this data fits an ARIMA model at all."
-            )
-            lb = {v: results["variables"][v]["diagnostics"]["ljung_box"]["pvalue"]
-                  for v in ["discharge", "rainfall", "stage"]}
-            st.info(
-                f"**The three models are not equally well specified — this matters.** A "
-                f"satisfactory ARIMA model should leave residuals resembling white noise. "
-                f"The Ljung–Box test asks whether autocorrelation remains in the residuals "
-                f"up to the tested lags; a small p-value rejects that null.\n\n"
-                f"- Rainfall: p = {lb['rainfall']:.4f} — **not rejected**, the cleanest fit "
-                f"of the three.\n"
-                f"- Discharge: p = {lb['discharge']:.4f} — **rejected**, structure remains.\n"
-                f"- Stage: p = {lb['stage']:.4f} — **rejected**, structure remains.\n\n"
-                f"Discharge and stage retain unexplained temporal structure, most likely "
-                f"seasonal, which a non-seasonal ARIMA does not absorb. This is reported "
-                f"as a limitation, not hidden, and it is the most likely reason stage "
-                f"misses one of its seven property checks."
-            )
-            for v in ["discharge", "rainfall", "stage"]:
-                o = outputs[v]
-                r = o["r"]
-                st.markdown(f"**{VAR_LABEL[v]}**")
-                st.markdown(
-                    f"Model: `ARIMA{tuple(r['order'])}`, AIC {r['aic']:.1f}, differencing d={r['differencing_d']}. "
-                    f"Coefficients estimated on 1980-2003 (conditional sum of squares; exact ordinary "
-                    f"least squares when there's no moving-average term), validated on 2004-2014."
-                )
-
-                se = r["standard_errors"]
-                coef_rows = [{"Coefficient": "constant", "Estimate": round(r["constant"], 4),
-                              "Standard error": round(se["c"], 4) if se["c"] is not None else "n/a"}]
-                for i, ph in enumerate(r["phi"]):
-                    s = se["phi"][i]
-                    coef_rows.append({"Coefficient": f"AR (phi) {i+1}", "Estimate": round(ph, 4),
-                                      "Standard error": round(s, 4) if s is not None else "n/a"})
-                for i, th in enumerate(r["theta"]):
-                    s = se["theta"][i]
-                    coef_rows.append({"Coefficient": f"MA (theta) {i+1}", "Estimate": round(th, 4),
-                                      "Standard error": round(s, 4) if s is not None else "n/a"})
-                st.caption("Estimated coefficients — not just which order was picked, but the actual "
-                          "numbers and how precisely each is known:")
-                st.dataframe(pd.DataFrame(coef_rows), use_container_width=True, hide_index=True)
-
-                stat = r["stationarity_report"][-1]
-                st.caption(
-                    f"Stationarity evidence for d={r['differencing_d']}: ADF stat {stat['adf_stat']:.3f} "
-                    f"({'rejects a unit root' if stat['adf_stationary'] else 'does not reject a unit root'}), "
-                    f"KPSS stat {stat['kpss_stat']:.3f} "
-                    f"({'does not reject stationarity' if stat['kpss_stationary'] else 'rejects stationarity'}) "
-                    f"— the joint evidence used to decide this series fits an ARIMA model at this "
-                    f"differencing order, not an assumption."
-                )
-
-                val_rows = [{"Property": k.replace("_", " "), "Historical": v2["historical"],
-                            "Model's range (90%)": f"[{v2['ensemble_p5']:.2f}, {v2['ensemble_p95']:.2f}]",
-                            "Reproduced?": "yes" if v2["within_90pct_envelope"] else "no"}
-                           for k, v2 in r["validation"].items()]
-                st.dataframe(pd.DataFrame(val_rows), use_container_width=True, hide_index=True)
-                lb_p = r["diagnostics"]["ljung_box"]["pvalue"]
-                st.caption(f"Residual check (Ljung-Box p = {lb_p:.4f}): "
-                          f"{'no leftover pattern detected' if lb_p > 0.05 else 'some leftover pattern remains, noted in the report'}.")
-                st.markdown("---")
-    else:
+    if record is None:
         st.markdown(
-            f"""<div class="controls" style="text-align:center;padding:3rem 1.5rem;">
-            <p style="font-size:1.0rem;color:{GRAY};margin:0;">
-            Pick a future range above, then press
-            <strong style="color:{BLUE}">Get the Outlook</strong>.</p>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-
-# ── RIGHT rail: compact outlook cards, one per variable ──────────────────────
-with right:
-    trend_arrow = {"up": "&#9650;", "down": "&#9660;", "steady": "&#8226;"}
-    trend_color = {"up": BLUE, "down": AMBER, "steady": GRAY}
-    level_pill_color = {"normal": GREEN, "attention": AMBER}
-
-    if outputs:
-        st.markdown(f"**Outlook summary**")
-        st.caption("The colored score on each card counts how many of 7 statistical "
-                  "properties of the real 2004&ndash;2014 record fell inside the "
-                  "simulated 90% envelope. It is evidence of <strong>property "
-                  "reproduction</strong> &mdash; not point-forecast accuracy, not a "
-                  "percentage correct, and not the reliability of any individual "
-                  "future value.", unsafe_allow_html=True)
-        for v in ["discharge", "rainfall", "stage"]:
-            o = outputs[v]
-            record_word, record_color = track_record_word(o["n_ok"], o["n_tot"])
-            st.markdown(
-                f"""<div class="card" style="border-left:4px solid {VAR_COLOR[v]};
-                     box-shadow:0 4px 20px {VAR_COLOR[v]}26;">
-                <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p>
-                    <span class="pill" style="background:{record_color};color:white;margin-left:auto;">
-                        {o['n_ok']}/{o['n_tot']} &nbsp;{record_word.split()[0]}</span>
-                </div>
-                <div class="big-stat">{o['avg_val']:.1f} <span style="font-size:0.85rem;font-weight:500;color:{GRAY}">{UNIT[v]}</span></div>
-                <div>
-                    <span class="pill" style="background:{trend_color[o['trend_dir']]}22;color:{trend_color[o['trend_dir']]}">
-                        {trend_arrow[o['trend_dir']]} {o['trend_word'].split()[0].capitalize()}</span>
-                    <span class="pill" style="background:{level_pill_color[o['level_status']]}22;color:{level_pill_color[o['level_status']]}">
-                        {o['level_word'].capitalize()}</span>
-                </div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
+            f"""
+            <div class="card" style="text-align:center; padding:2.4rem 1rem;">
+              <p class="card-title" style="font-size:1.05rem;">No record generated yet</p>
+              <p style="color:{GRAY}; font-size:0.9rem;">Choose a number of years and press
+              <strong style="color:{BLUE}">Generate synthetic record</strong>. The table of
+              monthly values appears here.</p>
+            </div>
+            """, unsafe_allow_html=True)
     else:
-        st.markdown(f"**Typical levels**")
-        st.caption("Historical averages. The colored score on each card counts how "
-                  "many of 7 statistical properties of the real 2004&ndash;2014 "
-                  "record fell inside the simulated 90% envelope. It is evidence of "
-                  "<strong>property reproduction</strong> &mdash; not point-forecast "
-                  "accuracy, and not the reliability of any individual future value.",
-                  unsafe_allow_html=True)
-        for v in ["discharge", "rainfall", "stage"]:
-            r = results["variables"][v]
-            mean_val = r["historical_stats"]["mean"]
-            n_ok, n_tot = r["validation_n_within"], r["validation_n_total"]
-            record_word, record_color = track_record_word(n_ok, n_tot)
+        gen_years = st.session_state["gen_years"]
+        gen_reps = st.session_state["gen_reps"]
+        months = st.session_state["months"]
+        first = record[0]
+
+        # ── The record itself. This is the deliverable. ───────────────────────
+        st.markdown(f"#### The generated record — {gen_years:,} years, "
+                    f"{len(first):,} monthly values")
+        table = pd.DataFrame({
+            "Year": np.repeat(np.arange(1, gen_years + 1), 12)[:len(first)],
+            "Month": [MONTH_ABBR[m - 1] for m in months],
+            f"Discharge ({UNIT})": np.round(first, 2),
+        })
+        st.dataframe(table, use_container_width=True, height=380, hide_index=True)
+        st.download_button(
+            f"Download this record as CSV ({len(first):,} rows)",
+            data=table.to_csv(index=False).encode("utf-8"),
+            file_name=f"synthetic_discharge_{gen_years}yr.csv",
+            mime="text/csv")
+        st.caption(
+            "Years are numbered 1 to "
+            f"{gen_years:,} rather than dated. The model is stationary, so the record "
+            "has no particular position in time — it is a sample of the river's "
+            "behaviour, not a calendar of future events.")
+
+        st.markdown("---")
+
+        # ── Design numbers ───────────────────────────────────────────────────
+        rp_df, annual_max = return_period_table(record)
+        st.markdown("#### What a design calculation reads off it")
+        st.caption(
+            f"The largest flow in each of the {annual_max.size:,} synthetic years was "
+            "taken, and those annual maxima ranked. The flow for a 100-year return "
+            "period is the value exceeded in 1 per cent of them.")
+
+        rc1, rc2 = st.columns([1.1, 1])
+        with rc1:
+            st.dataframe(
+                rp_df.style.format({f"Design flow ({UNIT})": "{:.1f}"}),
+                use_container_width=True, hide_index=True,
+                column_config={
+                    f"Design flow ({UNIT})": st.column_config.NumberColumn(
+                        f"Design flow ({UNIT})", format="%.1f", width="medium"),
+                })
+        with rc2:
+            chart_df = rp_df.copy()
+            chart_df["T"] = [int(str(x).split()[0]) for x in chart_df["Return period"]]
+            rp_chart = alt.Chart(chart_df).mark_line(
+                point=alt.OverlayMarkDef(size=60, filled=True), color=BLUE
+            ).encode(
+                x=alt.X("T:Q", scale=alt.Scale(type="log"),
+                        title="Return period (years, log scale)"),
+                y=alt.Y(f"Design flow ({UNIT}):Q", title=f"Design flow ({UNIT})"),
+                tooltip=[alt.Tooltip("T:Q", title="Return period (yr)"),
+                         alt.Tooltip(f"Design flow ({UNIT}):Q", format=".1f")],
+            ).properties(height=250)
+            obs_rule = alt.Chart(pd.DataFrame({"y": [hist_values.max()]})).mark_rule(
+                color=AMBER, strokeDash=[5, 4]).encode(y="y:Q")
+            st.altair_chart(rp_chart + obs_rule, use_container_width=True)
+            st.caption(
+                f"Dashed line: the largest month actually measured "
+                f"({hist_values.max():.0f} {UNIT}) in {n_hist_years} years of record.")
+
+        # ── Distribution ─────────────────────────────────────────────────────
+        st.markdown("#### How the generated record compares with the measured one")
+        sample = record.ravel()
+        if sample.size > 60000:                     # keep the chart responsive
+            sample = np.random.default_rng(0).choice(sample, 60000, replace=False)
+
+        d1, d2 = st.columns(2)
+        with d1:
+            comp = pd.concat([
+                pd.DataFrame({"value": hist_values, "Record": "Measured"}),
+                pd.DataFrame({"value": sample, "Record": "Synthetic"}),
+            ])
+            hist_chart = alt.Chart(comp).transform_filter(
+                alt.datum.value < float(np.percentile(sample, 99.5))
+            ).mark_area(opacity=0.45, interpolate="step").encode(
+                x=alt.X("value:Q", bin=alt.Bin(maxbins=45),
+                        title=f"Monthly discharge ({UNIT})"),
+                y=alt.Y("count()", stack=None, title="Frequency"),
+                color=alt.Color("Record:N",
+                                scale=alt.Scale(domain=["Measured", "Synthetic"],
+                                                range=[NAVY, BLUE])),
+            ).properties(height=250)
+            st.altair_chart(hist_chart, use_container_width=True)
+            st.caption("Distribution of monthly values, upper 0.5% trimmed so the "
+                       "bulk of both records is legible.")
+        with d2:
+            probs = np.linspace(0.1, 99.9, 220)
+            fdc = pd.concat([
+                pd.DataFrame({"Exceeded (%)": 100 - probs,
+                              "value": np.percentile(hist_values, probs),
+                              "Record": "Measured"}),
+                pd.DataFrame({"Exceeded (%)": 100 - probs,
+                              "value": np.percentile(sample, probs),
+                              "Record": "Synthetic"}),
+            ])
+            fdc_chart = alt.Chart(fdc).mark_line(strokeWidth=2).encode(
+                x=alt.X("Exceeded (%):Q", title="Percentage of months exceeding"),
+                y=alt.Y("value:Q", scale=alt.Scale(type="log"),
+                        title=f"Monthly discharge ({UNIT}, log scale)"),
+                color=alt.Color("Record:N",
+                                scale=alt.Scale(domain=["Measured", "Synthetic"],
+                                                range=[NAVY, BLUE])),
+                tooltip=["Record:N", "Exceeded (%):Q", "value:Q"],
+            ).properties(height=250)
+            st.altair_chart(fdc_chart, use_container_width=True)
+            st.caption("Flow-duration curve. The two lines lying together means the "
+                       "synthetic record reproduces the measured one across its range.")
+
+        # ── Narrative ────────────────────────────────────────────────────────
+        n_ok, n_tot = R["validation_n_within"], R["validation_n_total"]
+        word, colour = track_record_word(n_ok, n_tot)
+        rp100 = rp_df.loc[rp_df["Return period"] == "100 yr", f"Design flow ({UNIT})"]
+        rp100_txt = (f"a 100-year flow of about <strong>{rp100.iloc[0]:.0f} {UNIT}</strong>"
+                     if not rp100.empty else
+                     "too few synthetic years to estimate a 100-year flow")
+        st.markdown(
+            f"""
+            <div class="narrative">
+            This record covers <strong>{gen_years:,} years</strong> of monthly flow
+            ({gen_reps} independent records, {annual_max.size:,} synthetic years in
+            total). It averages <strong>{record.mean():.1f} {UNIT}</strong> against
+            <strong>{hist_values.mean():.1f} {UNIT}</strong> in the measured record,
+            and gives {rp100_txt}. Tested against {n_hist_years - 24} years of data
+            held back from fitting, this model reproduced <strong>{n_ok} of {n_tot}</strong>
+            statistical properties of the real record.
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── For the curious ──────────────────────────────────────────────────
+        with st.expander("For the curious: the statistics behind this record"):
+            model, profile, fr = fit_model()
             st.markdown(
-                f"""<div class="card" style="border-left:4px solid {VAR_COLOR[v]};
-                     box-shadow:0 4px 20px {VAR_COLOR[v]}26;">
-                <div class="card-head">{svg_icon(v, VAR_COLOR[v])}<p class="card-title">{VAR_LABEL[v]}</p>
-                    <span class="pill" style="background:{record_color};color:white;margin-left:auto;">
-                        {n_ok}/{n_tot} &nbsp;{record_word.split()[0]}</span>
-                </div>
-                <div class="big-stat">{mean_val:.1f} <span style="font-size:0.85rem;font-weight:500;color:{GRAY}">{UNIT[v]}</span></div>
-                <div><span class="pill" style="background:{GRAY}22;color:{GRAY}">Long-term typical</span></div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
+                f"**Model.** `{R['label']}` fitted to the deseasonalised "
+                f"log-transformed series, AIC {R['aic']:.1f}. Estimated on "
+                f"{R['train_period'][0][:4]}–{R['train_period'][1][:4]} and validated "
+                f"on {R['valid_period'][0][:4]}–{R['valid_period'][1][:4]}; the "
+                "record generator above uses coefficients refitted on the full record.")
+
+            se = R["standard_errors"]
+            rows = [{"Coefficient": "constant", "Estimate": R["constant"],
+                     "Standard error": se["c"]}]
+            for i, ph in enumerate(R["phi"]):
+                rows.append({"Coefficient": f"AR (phi) {i+1}", "Estimate": ph,
+                             "Standard error": se["phi"][i]})
+            for i, th in enumerate(R["theta"]):
+                rows.append({"Coefficient": f"MA (theta) {i+1}", "Estimate": th,
+                             "Standard error": se["theta"][i]})
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+            st.markdown("**The seasonal component — twelve monthly parameters.**")
+            st.caption(
+                "The annual cycle is removed before fitting by expressing each month "
+                "as a departure from its own calendar month's average, and restored "
+                "when the record is generated. This is what makes the model "
+                "stationary, and therefore what makes a record of any length "
+                "meaningful.")
+            st.dataframe(pd.DataFrame({
+                "Month": MONTH_ABBR,
+                "Mean (log scale)": np.round(profile["means"], 3),
+                "Std. dev. (log scale)": np.round(profile["sds"], 3),
+                f"Typical flow ({UNIT})": np.round(np.exp(profile["means"]), 1),
+            }), use_container_width=True, hide_index=True)
+
+            alt_info = R.get("seasonal_difference_alternative", {})
+            if alt_info.get("applicable"):
+                st.markdown("**Why the cycle is not removed by differencing at lag 12.**")
+                st.caption(
+                    f"Differencing at lag 12 was tested and fits the measured record "
+                    f"well (Ljung–Box p = {alt_info['ljung_box_pvalue']:.3f}). It "
+                    "cannot be used to generate a long record, because it leaves an "
+                    "integrated process whose spread grows without limit. Asked for "
+                    f"{alt_info['record_years']:,} years it returns a series averaging "
+                    f"{alt_info['record_mean']:.2g} {UNIT} — against a measured "
+                    f"average of {hist_values.mean():.1f} — drifting by a factor of "
+                    f"{alt_info['drift_ratio']:.2g} from its first decade to its last. "
+                    "Removing the cycle by seasonal standardisation instead keeps the "
+                    "process stationary. This is discussed in Section 4.2 of the report.")
+
+            rep = R["stationarity_report"][-1]
+            st.caption(
+                f"Stationarity of the deseasonalised series — ADF statistic "
+                f"{rep['adf_stat']:.3f} "
+                f"({'rejects' if rep['adf_stationary'] else 'does not reject'} a unit "
+                f"root); KPSS statistic {rep['kpss_stat']:.3f} "
+                f"({'does not reject' if rep['kpss_stationary'] else 'rejects'} "
+                f"stationarity). Both point to d = 0, so no differencing is applied.")
+
+            st.markdown("**Property-based validation** (2004–2014, held out of fitting)")
+            st.dataframe(pd.DataFrame([{
+                "Property": k.replace("_", " "),
+                "Historical": round(v["historical"], 3),
+                "Model's range (90%)": f"[{v['ensemble_p5']:.2f}, {v['ensemble_p95']:.2f}]",
+                "Reproduced?": "yes" if v["within_90pct_envelope"] else "no",
+            } for k, v in R["validation"].items()]),
+                use_container_width=True, hide_index=True)
+            st.caption(
+                "The property not reproduced is the seasonal amplitude: the annual "
+                "cycle at this gauge weakened over the record (amplitude 35.2 m³/s in "
+                "1980–89 and 43.5 in 1990–99, against 25.8 in 2004–14), so a model "
+                "whose seasonal parameters come from the earlier period cannot match "
+                "the later one. That is a finding about the river, not a fault in the "
+                "fit — see Section 4.6 of the report.")
+
+# ── Right rail: the extremes ──────────────────────────────────────────────────
+with right:
+    record = st.session_state.get("record")
+    if record is None:
+        st.markdown(
+            f"""
+            <div class="card">
+              <p class="card-title">The measured record</p>
+              <div class="big-stat">{hist_values.mean():.1f} {UNIT}</div>
+              <span class="pill" style="background:#F1F5F9; color:{GRAY};">Long-term average</span>
+              <div class="stat-row"><span>Highest month</span><b>{hist_values.max():.1f}</b></div>
+              <div class="stat-row"><span>Lowest month</span><b>{hist_values.min():.2f}</b></div>
+              <div class="stat-row"><span>Years of record</span><b>{n_hist_years}</b></div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.caption("Generate a record to see the same statistics for it.")
+    else:
+        gen_years = st.session_state["gen_years"]
+        gen_reps = st.session_state["gen_reps"]
+        n_ok, n_tot = R["validation_n_within"], R["validation_n_total"]
+        word, colour = track_record_word(n_ok, n_tot)
+        st.markdown(
+            f"""
+            <div class="card">
+              <p class="card-title">Generated record — extremes</p>
+              <span class="pill" style="background:{colour}1A; color:{colour};">
+                {n_ok}/{n_tot} {word.split()[0]}</span>
+              <div class="big-stat">{record.mean():.1f} {UNIT}</div>
+              <span class="pill" style="background:#F1F5F9; color:{GRAY};">Average month</span>
+              <div class="stat-row"><span>Highest month</span><b>{record.max():.1f}</b></div>
+              <div class="stat-row"><span>99th percentile</span><b>{np.percentile(record, 99):.1f}</b></div>
+              <div class="stat-row"><span>95th percentile</span><b>{np.percentile(record, 95):.1f}</b></div>
+              <div class="stat-row"><span>Lowest month</span><b>{record.min():.2f}</b></div>
+              <div class="stat-row"><span>Std. deviation</span><b>{record.std(ddof=1):.1f}</b></div>
+              <div class="stat-row"><span>Synthetic years</span><b>{gen_years * gen_reps:,}</b></div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="card">
+              <p class="card-title">The measured record</p>
+              <div class="stat-row"><span>Average month</span><b>{hist_values.mean():.1f}</b></div>
+              <div class="stat-row"><span>Highest month</span><b>{hist_values.max():.1f}</b></div>
+              <div class="stat-row"><span>Lowest month</span><b>{hist_values.min():.2f}</b></div>
+              <div class="stat-row"><span>Std. deviation</span><b>{hist_values.std(ddof=1):.1f}</b></div>
+              <div class="stat-row"><span>Years</span><b>{n_hist_years}</b></div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.caption(
+            "The single highest month of a long synthetic record should not be used "
+            "as a design figure: it is the most extreme of "
+            f"{gen_years * gen_reps:,} simulated years, and the model has no upper "
+            "bound. Use the return periods instead.")

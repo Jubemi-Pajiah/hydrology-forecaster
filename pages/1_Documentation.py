@@ -62,11 +62,12 @@ st.caption(
 
 st.markdown(
     """<div class="callout">
-    <strong>In one sentence:</strong> we don't try to guess one exact number for next month's
-    river flow, rainfall, or water level &mdash; instead, we generate a thousand plausible
-    versions of the future and show you the range they land in, checked against 35 years of
-    real history. The rest of this page explains that in as much or as little detail as you
-    want: what the app does, the method behind it, and how to read what it shows you.
+    <strong>In one sentence:</strong> we don't try to guess the river's flow in any particular
+    future month &mdash; instead, we fit a model to 35 years of measurements and use it to
+    write out a much longer record of the same river, so that the rare floods and droughts a
+    dam or channel has to survive appear often enough to be counted. The rest of this page
+    explains that in as much or as little detail as you want: what the app does, the method
+    behind it, and how to read what it shows you.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -75,23 +76,43 @@ st.markdown(
 st.markdown("## 1. What This App Does")
 st.markdown(
     f"""
-This application forecasts **monthly discharge, rainfall, and stage** for the
-**{basin}** using three separate statistical time-series models, one per variable.
+This application **generates synthetic monthly discharge records** for the
+**{basin}** — sequences of monthly flow, of whatever length you ask for, that
+behave statistically like the measured river but are far longer than it.
 
-Each is a **statistical ARIMA model** (Box&ndash;Jenkins methodology) that learns a
-variable's temporal behaviour directly from its own historical record and projects
-that behaviour forward -- no rainfall-runoff routing, no cross-variable input, and
-(critically) **no single "correct" forecast**: because the model is stochastic, it
-produces an **ensemble of plausible future sequences**, not one number.
+The reason to want one is practical. The gauge has been read for 35 years, which
+gives 35 annual maximum flows. A spillway designed against a 1-in-100-year event
+cannot be sized from 35 numbers. Fitting a model to those 35 years and generating
+1,000 years from it gives 1,000 annual maxima drawn from the same statistical
+behaviour, and the design flow can then be counted rather than guessed.
+
+The engine is a **statistical ARIMA model** (Box&ndash;Jenkins methodology) that
+learns the river's temporal behaviour from its own historical record — no
+rainfall-runoff routing, no cross-variable input, and (critically) **no single
+"correct" answer**: because the model is stochastic, generating twice gives two
+different records, both equally valid samples.
 """
 )
 st.markdown(
     """<div class="callout">
-    <strong>Why three separate models instead of one?</strong> The same ARIMA machinery applies
-    to any series that fits its assumptions -- streamflow, rainfall, water level, even stock
-    prices. Rather than building one model to predict discharge and hoping it generalises,
-    this app estimates three independent models, one per variable, and shows that the same
-    identification/estimation/validation procedure works for all three.
+    <strong>What it does not do.</strong> It does not predict the discharge of a named
+    future month. That quantity is not what the model estimates, and it is not what a
+    design calculation uses. The generated record is deliberately not dated: the fitted
+    process is stationary, so the record has no particular position in time. It is a
+    longer sample of the same river, not a calendar of future events.
+    </div>""",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    """<div class="callout">
+    <strong>Does this only work on rivers?</strong> No. The machinery reads a column of
+    numbers, tests it for seasonality and stationarity, searches for the orders that best
+    describe it, and generates from the result. Nothing in that sequence knows what the
+    numbers measure — the same code applied to rainfall, to water level, or to any other
+    series would select its own orders and estimate its own coefficients. Section 4.7 of the
+    report tests exactly this, running the identical unmodified program on three different
+    variables and getting three different answers back. What is fixed here is the
+    <em>data</em> the deployed app is wired to, not the method.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -117,33 +138,57 @@ ARIMAX, deliberately: each variable is forecast from its own past only, by desig
 there is no exogenous driver to add.
 """
 )
-st.markdown("### What differencing does, and does not, do")
+st.markdown("### How the annual cycle is removed, and why it matters")
 st.markdown(
     """
-This is worth stating precisely, because it is easy to overstate. Ordinary ARIMA
-differencing forms
+Ordinary ARIMA differencing forms
 
 $$X_t - X_{t-1}$$
 
 which removes a **trend or slow drift in level**. It does *not*, by itself, remove an
-annual seasonal cycle. Removing an annual cycle from monthly data requires **seasonal
-differencing**,
+annual seasonal cycle, at any order of *d*. That is the single most important thing to
+be clear about here, because a monthly river record is dominated by its annual cycle —
+at this gauge the twelve monthly averages account for about **half the total variance**
+of the series.
+
+There are two standard ways to remove it, and this project uses the second.
+
+**Seasonal differencing** forms
 
 $$X_t - X_{t-12}$$
 
-or the seasonal terms of a **SARIMA** model.
+subtracting from each month the same month a year earlier. This is the SARIMA approach,
+and it removes the cycle cleanly. It was tested here, and it fits the measured record
+well.
 
-So the reason this project moved from a daily to a monthly timestep is narrower than
-"differencing removes the seasonality". Ordinary differencing of a daily river series
-gains little, because such a series does not genuinely trend over a single day. Monthly
-aggregation strips the short-term noise and **exposes** the annual cycle and any slow
-drift clearly enough that the differencing order *d* becomes a meaningful thing to test
-for. It does not turn ordinary differencing into a seasonal filter.
-
-What the stationarity tests actually selected for this basin was **d = 0** for all three
-variables, so these models do not difference the series at all. The seasonal structure
-that consequently remains in the discharge and stage residuals (Section 5) is an
-acknowledged reason to investigate SARIMA in future work.
+**Seasonal standardisation** instead estimates the average and the spread of each of the
+**twelve calendar months**, and rewrites every observation as a departure from its own
+month's average, in units of its own month's spread. The cycle is stored as 12 pairs of
+numbers and restored when a record is generated.
+"""
+)
+st.markdown(
+    """<div class="callout">
+    <strong>Why the difference matters here.</strong> Both remove the cycle, and for a
+    forecast a few months ahead you could use either. They part company when the object is
+    a record thousands of months long. Seasonal differencing leaves an <em>integrated</em>
+    process: reconstructing the actual flow requires a running total, and a running total
+    of random terms is a random walk, whose spread grows without limit. Over 1,000 years
+    the generated series wanders away from the river entirely — in the test run here, to an
+    average of around 10<sup>10</sup> m³/s against a measured average of 16.4. Seasonal
+    standardisation leaves a <em>stationary</em> process, so a record of any length stays a
+    sample of the same distribution. Since generating long records is the whole purpose,
+    standardisation is what the model uses. Section 4.2 of the report gives the numbers.
+    </div>""",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    """
+With the cycle removed this way, the stationarity tests select **d = 0** for the
+remaining series: ADF rejects a unit root and KPSS does not reject stationarity, so no
+further differencing is needed or applied. The **12** seasonal parameters carry the
+annual structure; the AR and MA terms describe only the month-to-month departures from
+the average year.
 """
 )
 st.markdown("### Working on log-transformed values")
@@ -313,25 +358,37 @@ st.markdown("## 6. How to Use the App")
 st.markdown(
     """
 1. Go to the **River Outlook** page.
-2. Set the range you want with **Predict from [month] [year] to [month] [year]**, or hit
-   one of the jump-to-range presets. The record ends December 2014, so every predictable
-   month is after that.
-3. Press **Get the Outlook** -- one click forecasts all three variables together.
+2. Type **how many years** of record you want, or press one of the shortcuts
+   (30 / 100 / 500 / 1,000). Any value from 1 to 10,000 is accepted.
+3. Optionally set **independent records** -- how many separate records to generate. The
+   table shows the first; the statistics and return periods pool all of them, so more
+   records means a steadier estimate of the rare events.
+4. Press **Generate synthetic record**.
 
-Because the model is stochastic, each click generates a fresh random ensemble -- the
-exact synthetic paths will differ between runs, and that is expected, not a bug. What
-you'll see:
-- **Three cards**, one per variable, each with a plain-English summary sentence, a
-  headline number, and two small tags: a trend (rising / falling / steady) and how the
-  level compares to what's typical.
-- **A chart per variable** showing recent history, the range of plausible futures, and
-  the ensemble **median** path through the middle of that range (a median, not a
-  prediction -- see "Working on log-transformed values" above).
-- **A "track record" tag** on each card, showing how many of seven statistical
-  properties of the real 2004-2014 record fell inside the simulated 90% envelope. This
-  is evidence of property reproduction, not a forecast-accuracy percentage.
-- **A "for the curious" section** at the bottom with the full statistical detail
-  (model orders, coefficients, diagnostics) for anyone who wants it.
+Because the model is stochastic, each press produces a fresh record -- the exact values
+will differ every time, and that is expected, not a bug. What you'll see:
+
+- **The record itself**, first and largest: one row per month for every year requested.
+  1,000 years is 12,000 rows. It can be read on screen or downloaded as a CSV.
+- **Return periods** -- the design flow for a 2-, 5-, 10-, 25-, 50-, 100- and 500-year
+  event, taken from the largest flow of each synthetic year. This is what a spillway or
+  channel calculation actually consumes.
+- **Two comparison charts** -- the distribution of monthly values, and the flow-duration
+  curve, each showing the generated record against the measured one. The two lines lying
+  on top of each other is the visual check that the synthetic record behaves like the
+  real river.
+- **An extremes card** on the right: highest and lowest month, 95th and 99th percentiles.
+- **A "track record" tag**, showing how many of seven statistical properties of the real
+  2004-2014 record fell inside the simulated 90% envelope. This is evidence of property
+  reproduction, not a forecast-accuracy percentage.
+- **A "for the curious" section** with the full statistical detail -- coefficients and
+  standard errors, the twelve seasonal parameters, the stationarity evidence, and the
+  validation table.
+
+**Use the return periods, not the single highest month.** The largest value in a long
+generated record is the most extreme of tens of thousands of simulated years, and the
+model has no upper bound, so that number reflects the shape of the assumed distribution
+rather than any physical limit of the channel.
 """
 )
 
@@ -341,12 +398,13 @@ st.markdown(
     """
 | Limitation | Implication |
 |-----------|-------------|
-| **Univariate per variable** | Each model uses only its own past; discharge cannot anticipate a rainfall event that has not yet reached the river. |
-| **Non-seasonal ARIMA** | No explicit seasonal (P, D, Q, 12) terms. Residuals should resemble white noise for a satisfactory fit; the Ljung-Box test **rejects** that for discharge and for stage (see Section 3 for the p-values) and does **not** reject it for rainfall. Rainfall therefore has the cleanest statistical fit of the three; discharge and stage retain unexplained temporal structure, most plausibly seasonal. Acknowledged, not hidden -- and the direct reason SARIMA is the leading item of future work. |
-| **Linear model** | Catchment response during extreme events is partly non-linear and not fully captured. |
-| **Gaussian innovations** | The synthetic ensembles draw innovations from a Normal distribution fitted to the residuals; residual diagnostics show heavier tails than Normal for some variables, so extreme-tail synthetic values may be somewhat under-dispersed. |
-| **Primary basin** | The full stochastic property-based validation covers this basin only. A supplementary check reran the identification and estimation procedure, unmodified, on two further CAMELS basins (one arid, one humid continental with snow) for discharge and rainfall: it ran cleanly on both, but its qualitative findings did not universally repeat, and two of the four extra fits showed numerical warning signs. So the *procedure* transfers; the *specific results* are not claimed to. Full replication -- stage included, with the complete 1,000-member validation -- at other basins remains to be done. |
-| **Long horizons are conditional** | The model is mathematically defined at any lead time, so the app will answer for any year you ask for. That is not the same as being reliable that far out: every run assumes the process estimated from 1980-2003 continues unchanged, which climate change, land-use change, reservoir construction, river engineering, urbanisation, or a change to the gauge would each break. Read long-range output as a **synthetic scenario** consistent with this river's historical statistics -- what a design calculation needs -- not as a prediction of the river in a given future year. |
+| **Univariate** | The model uses only discharge's own past; it cannot anticipate a rainfall event that has not yet reached the river. |
+| **Fixed seasonal component** | The annual cycle is stored as twelve constant monthly parameters. The record itself says this is an approximation: the cycle at this gauge weakened measurably over 35 years (amplitude 35.2 m³/s in 1980-89 and 43.5 in 1990-99, against 25.8 in 2004-14). That change is exactly what the one failing property check detects. A periodic model with time-varying seasonal parameters would represent it better. |
+| **Linear model, unbounded tail** | Catchment response during extreme events is partly non-linear and not fully captured. The log-linear form also has **no upper bound**, so the single largest value in a long generated record is governed by the assumed distribution rather than by any physical limit of the channel. Use the return periods, not the record maximum. |
+| **Parameters treated as known** | The generated record propagates the randomness of the process but not the *sampling uncertainty of the fitted coefficients themselves*. The return-period estimates are therefore more precise-looking than the 35 years of evidence strictly warrant. |
+| **No new information** | Generating 1,000 years does not add knowledge the 35-year record did not contain; it works out the consequences of the fitted structure more fully. Estimates near the observed range are well supported, and become progressively more model-dependent beyond it. |
+| **Primary basin** | The full stochastic property-based validation covers this basin only. A supplementary check reran the identification and estimation procedure, unmodified, on two further CAMELS basins (one arid, one humid continental with snow) for discharge and rainfall: it ran cleanly on both, but its qualitative findings did not universally repeat, and two of the four extra fits showed numerical warning signs. So the *procedure* transfers; the *specific results* are not claimed to. |
+| **Stationarity assumed** | Every generated record assumes the process estimated from the observed period continues to govern the basin unchanged — which climate change, land-use change, reservoir construction, river engineering, urbanisation, or a change to the gauge would each break. A stationary model cannot represent any of them. |
 """
 )
 
@@ -364,7 +422,7 @@ time-series library).
 finals_project/
 ├── app.py                 ← navigation entrypoint
 ├── pages/
-│   ├── 0_Forecast.py      ← forecast tool (stochastic, per-variable)
+│   ├── 0_Forecast.py      ← synthetic record generator
 │   └── 1_Documentation.py ← this page
 ├── src/
 │   ├── preprocess.py      ← monthly loaders (discharge, rainfall, stage)
@@ -407,7 +465,7 @@ st.markdown(
 
 st.markdown("---")
 st.caption(
-    "Conecuh River Stochastic Forecaster  ·  "
+    "Conecuh River Synthetic Record Generator  ·  "
     "Computer Hydrological Forecasting — Final Year Project  ·  "
     "Ugbodaga Benedict Osikpemi  ·  "
     "Supervisor: Prof. K. O. Aiyesimoju  ·  2026"

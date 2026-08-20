@@ -30,9 +30,13 @@ def series_properties(values: np.ndarray, dates=None) -> dict:
     lag1_acf                : month-to-month persistence
     seasonal_amplitude      : range of the 12 calendar-month means (needs
                                `dates`; measures how strongly seasonal the
-                               series is -- the property the supervisor's
-                               "differencing removes seasonality" point is
-                               really about)
+                               series is). This is the property the
+                               timestep argument is really about -- note
+                               that ordinary differencing does not remove an
+                               annual cycle anyway (that needs X(t)-X(t-12)
+                               or SARIMA), so this statistic checks whether
+                               the AR/MA structure reproduces the seasonality
+                               on its own.
     max_dry_spell           : longest run of months below the 20th
                                percentile of the series itself (a drought /
                                low-flow duration proxy)

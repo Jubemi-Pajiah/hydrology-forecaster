@@ -186,6 +186,9 @@ def arch_test(resid: np.ndarray, lags: int = 20) -> dict:
 # ----------------------------------------------------------------------------
 # Differencing helpers
 # ----------------------------------------------------------------------------
+SEASONAL_PERIOD = 12
+
+
 def difference(y: np.ndarray, d: int) -> np.ndarray:
     return np.diff(np.asarray(y, dtype=float), n=d) if d > 0 else np.asarray(y, dtype=float)
 
@@ -194,12 +197,91 @@ def integrate_forecasts(y_hist: np.ndarray, w_fcst: np.ndarray, d: int) -> np.nd
     """
     Reconstruct level-scale forecasts from differenced-scale forecasts using
     the tail of the original history y_hist.
+
+    Accepts w_fcst of shape (n,) or (n_reps, n); the cumulative sum runs along
+    the last axis, so a whole ensemble integrates in one call.
     """
     cur = np.asarray(w_fcst, dtype=float)
     y_hist = np.asarray(y_hist, dtype=float)
     for level in range(d, 0, -1):
         base = np.diff(y_hist, n=level - 1)
-        cur = base[-1] + np.cumsum(cur)
+        cur = base[-1] + np.cumsum(cur, axis=-1)
+    return cur
+
+
+def seasonal_difference(y: np.ndarray, D: int, s: int = SEASONAL_PERIOD) -> np.ndarray:
+    """
+    Apply the seasonal differencing operator (1 - B^s)^D, i.e. D successive
+    passes of X(t) - X(t-s).
+
+    At a monthly timestep with s = 12 this is the operator that removes an
+    annual cycle. Ordinary differencing, X(t) - X(t-1), does not: it removes
+    trend and slow drift, leaving a twelve-month periodicity essentially
+    untouched. The two are different filters and the distinction matters here,
+    because the monthly records this project models are strongly seasonal but
+    show no unit root at lag 1.
+    """
+    out = np.asarray(y, dtype=float)
+    for _ in range(int(D)):
+        if len(out) <= s:
+            raise ValueError(
+                f"Series of length {len(out)} is too short for a lag-{s} difference."
+            )
+        out = out[s:] - out[:-s]
+    return out
+
+
+def integrate_seasonal(y_hist: np.ndarray, w_fcst: np.ndarray, D: int,
+                       s: int = SEASONAL_PERIOD) -> np.ndarray:
+    """
+    Invert (1 - B^s)^D: reconstruct the level scale from a seasonally
+    differenced series, anchored on the last s values of y_hist.
+
+    With D = 1 the relation X(t) = X(t-s) + w(t) splits the series into s
+    independent chains, one per phase of the cycle (all Januaries, all
+    Februaries, ...). Each chain is a plain cumulative sum started from the
+    corresponding month of the final year of history, so the inversion is s
+    interleaved cumulative sums rather than the single one that inverts
+    ordinary differencing.
+
+    Accepts w_fcst of shape (n,) or (n_reps, n).
+    """
+    cur = np.array(w_fcst, dtype=float)
+    y_hist = np.asarray(y_hist, dtype=float)
+    for level in range(int(D), 0, -1):
+        base = seasonal_difference(y_hist, level - 1, s)
+        if len(base) < s:
+            raise ValueError(
+                f"History of length {len(y_hist)} is too short to anchor a "
+                f"lag-{s} integration of order {D}."
+            )
+        anchor = base[len(base) - s:]
+        for j in range(s):
+            cur[..., j::s] = anchor[j] + np.cumsum(cur[..., j::s], axis=-1)
+    return cur
+
+
+def apply_differencing(y: np.ndarray, d: int, D: int = 0,
+                       s: int = SEASONAL_PERIOD) -> np.ndarray:
+    """Apply the full differencing operator (1 - B)^d (1 - B^s)^D to y."""
+    return difference(seasonal_difference(y, D, s), d)
+
+
+def invert_differencing(y_hist: np.ndarray, w: np.ndarray, d: int, D: int = 0,
+                        s: int = SEASONAL_PERIOD) -> np.ndarray:
+    """
+    Invert (1 - B)^d (1 - B^s)^D, the reverse of :func:`apply_differencing`.
+
+    The two operators are inverted in the opposite order to that in which they
+    were applied: the ordinary integration is anchored on the *seasonally
+    differenced* history, and the seasonal integration is then anchored on the
+    original history.
+    """
+    cur = np.asarray(w, dtype=float)
+    if d > 0:
+        cur = integrate_forecasts(seasonal_difference(y_hist, D, s), cur, d)
+    if D > 0:
+        cur = integrate_seasonal(y_hist, cur, D, s)
     return cur
 
 
@@ -208,23 +290,40 @@ def integrate_forecasts(y_hist: np.ndarray, w_fcst: np.ndarray, d: int) -> np.nd
 # ----------------------------------------------------------------------------
 class ARIMA:
     """
-    ARIMA(p, d, q) with a constant, estimated by conditional sum of squares.
+    ARIMA(p, d, q)(0, D, 0)[s] with a constant, estimated by conditional sum
+    of squares.
 
-    The series is differenced d times; an ARMA(p, q) model with intercept c is
-    then fitted to the differenced series w:
+    The series is differenced by (1 - B)^d (1 - B^s)^D; an ARMA(p, q) model
+    with intercept c is then fitted to the differenced series w:
 
         w_t = c + sum_i phi_i w_{t-i} + e_t + sum_j theta_j e_{t-j}
 
     AR(p) models (q = 0) are solved exactly by OLS; mixed models use SciPy's
     optimiser on the conditional sum of squared errors.
+
+    The seasonal part follows the standard multiplicative form
+
+        phi(B) PHI(B^s) (1-B)^d (1-B^s)^D w_t = c + theta(B) THETA(B^s) e_t
+
+    At a monthly timestep with s = 12, seasonal differencing removes the
+    annual cycle, which ordinary differencing does not do at any order of d.
+    A seasonal moving-average term is usually needed alongside it: seasonal
+    differencing of a largely deterministic cycle induces a strong negative
+    autocorrelation at lag s, which the non-seasonal terms cannot absorb.
     """
 
-    def __init__(self, order=(1, 0, 0)):
+    def __init__(self, order=(1, 0, 0), seasonal_order=(0, 0, 0),
+                 s=SEASONAL_PERIOD):
         self.p, self.d, self.q = order
-        self.order = order
+        self.order = tuple(order)
+        self.P, self.D, self.Q = seasonal_order
+        self.seasonal_order = tuple(seasonal_order)
+        self.s = int(s)
         self.c = 0.0
         self.phi = np.zeros(self.p)
         self.theta = np.zeros(self.q)
+        self.Phi = np.zeros(self.P)
+        self.Theta = np.zeros(self.Q)
         self.sigma2 = None
         self.aic = None
         self.bic = None
@@ -233,9 +332,59 @@ class ARIMA:
         self._y_train = None
         self._XtX_inv = None
 
+    # -- internal: multiplicative seasonal form -> plain coefficient vectors --
+    def _expand(self, phi, theta, Phi, Theta):
+        """
+        Expand the multiplicative seasonal form into plain AR and MA
+        coefficient vectors.
+
+        Convolving phi(B) with PHI(B^s), and theta(B) with THETA(B^s), yields
+        an equivalent ARMA whose coefficient vectors are long but mostly zero:
+        an ARIMA(1,0,0)(0,1,1)[12] expands to one AR coefficient and thirteen
+        MA coefficients, of which only the 1st and 12th (and their product at
+        lag 13) are non-zero. The conditional-sum-of-squares recursion then
+        runs unchanged, so there is one estimation path for the whole family
+        rather than a separate seasonal one.
+        """
+        s = self.s
+        phi = np.asarray(phi, dtype=float)
+        theta = np.asarray(theta, dtype=float)
+        Phi = np.asarray(Phi, dtype=float)
+        Theta = np.asarray(Theta, dtype=float)
+
+        ar_poly = np.concatenate([[1.0], -phi]) if len(phi) else np.array([1.0])
+        if len(Phi):
+            sar = np.zeros(len(Phi) * s + 1)
+            sar[0] = 1.0
+            for k, val in enumerate(Phi, start=1):
+                sar[k * s] = -val
+            ar_poly = np.convolve(ar_poly, sar)
+
+        ma_poly = np.concatenate([[1.0], theta]) if len(theta) else np.array([1.0])
+        if len(Theta):
+            sma = np.zeros(len(Theta) * s + 1)
+            sma[0] = 1.0
+            for k, val in enumerate(Theta, start=1):
+                sma[k * s] = val
+            ma_poly = np.convolve(ma_poly, sma)
+
+        return -ar_poly[1:], ma_poly[1:]
+
+    def _full(self):
+        """Expanded AR/MA coefficient vectors for the current parameters."""
+        return self._expand(self.phi, self.theta, self.Phi, self.Theta)
+
+    def _cond(self):
+        """Observations consumed before the CSS recursion can start."""
+        phi_full, theta_full = self._full()
+        return max(len(phi_full), len(theta_full))
+
     # -- internal: conditional residuals for a differenced series w ----------
     def _css_resid(self, w, c, phi, theta):
-        p, q = self.p, self.q
+        """Conditional residuals given *expanded* AR/MA coefficient vectors."""
+        phi = np.asarray(phi, dtype=float)
+        theta = np.asarray(theta, dtype=float)
+        p, q = len(phi), len(theta)
         m = max(p, q)
         n = len(w)
         e = np.zeros(n)
@@ -246,17 +395,27 @@ class ARIMA:
         return e
 
     def _pack(self):
-        return np.concatenate([[self.c], self.phi, self.theta])
+        return np.concatenate([[self.c], self.phi, self.theta, self.Phi, self.Theta])
 
     def _unpack(self, x):
-        p, q = self.p, self.q
+        p, q, P, Q = self.p, self.q, self.P, self.Q
         c = x[0]
         phi = x[1:1 + p]
         theta = x[1 + p:1 + p + q]
-        return c, phi, theta
+        Phi = x[1 + p + q:1 + p + q + P]
+        Theta = x[1 + p + q + P:1 + p + q + P + Q]
+        return c, phi, theta, Phi, Theta
+
+    def label(self) -> str:
+        """Model order as it is reported in the thesis and the web app."""
+        base = f"ARIMA({self.p}, {self.d}, {self.q})"
+        if self.P or self.D or self.Q:
+            base += f"({self.P}, {self.D}, {self.Q})[{self.s}]"
+        return base
 
     @classmethod
-    def from_params(cls, order, c, phi, theta, y):
+    def from_params(cls, order, c, phi, theta, y, seasonal_order=(0, 0, 0),
+                    s=SEASONAL_PERIOD, Phi=None, Theta=None):
         """
         Build a model from coefficients that were estimated earlier, instead of
         re-estimating them.
@@ -269,17 +428,20 @@ class ARIMA:
         starts in seconds rather than re-fitting on every cold start, and it
         forecasts from exactly the coefficients reported in the thesis.
         """
-        self = cls(tuple(order))
+        self = cls(tuple(order), tuple(seasonal_order), s)
         self.c = float(c)
         self.phi = np.asarray(phi, dtype=float)
         self.theta = np.asarray(theta, dtype=float)
+        self.Phi = np.asarray(Phi if Phi is not None else [], dtype=float)
+        self.Theta = np.asarray(Theta if Theta is not None else [], dtype=float)
 
         y = np.asarray(y, dtype=float)
         self._y_train = y
-        w = difference(y, self.d)
+        w = apply_differencing(y, self.d, self.D, self.s)
         self._w_train = w
-        m = max(self.p, self.q)
-        resid = self._css_resid(w, self.c, self.phi, self.theta)[m:]
+        phi_full, theta_full = self._full()
+        m = max(len(phi_full), len(theta_full))
+        resid = self._css_resid(w, self.c, phi_full, theta_full)[m:]
         self.resid_ = resid
         self.nobs = len(w) - m
         self.sigma2 = float(np.dot(resid, resid)) / self.nobs
@@ -294,16 +456,18 @@ class ARIMA:
         """
         y = np.asarray(y, dtype=float)
         self._y_train = y
-        w = difference(y, self.d)
-        p, q = self.p, self.q
-        m = max(p, q)
+        w = apply_differencing(y, self.d, self.D, self.s)
+        p, q, P, Q = self.p, self.q, self.P, self.Q
+        m = self._cond()
         n_eff = len(w) - m
-        k = p + q + 1 + 1  # AR + MA + constant + variance
+        k = p + q + P + Q + 1 + 1  # AR + MA + seasonal + constant + variance
         self._w_train = w
 
         self._XtX_inv = None
-        if q == 0:
-            # Exact OLS for pure AR(p) (with constant)
+        if q == 0 and P == 0 and Q == 0:
+            # Exact OLS for pure AR(p) (with constant). The multiplicative
+            # seasonal form is nonlinear in its parameters, so this shortcut
+            # only applies when there are no seasonal AR/MA terms.
             if p == 0:
                 self.c = float(w.mean())
                 self.phi = np.zeros(0)
@@ -319,25 +483,31 @@ class ARIMA:
                 self.phi = beta[1:]
                 self._XtX_inv = XtX_inv
         else:
-            # CSS optimisation for ARMA(p, q)
-            x0 = np.zeros(1 + p + q)
+            # CSS optimisation for ARMA(p, q)(P, Q)[s]
+            x0 = np.zeros(1 + p + q + P + Q)
             x0[0] = w.mean() * (1.0 - 0.5)
             if p:
                 x0[1] = 0.3
+            if Q:
+                # Seasonal differencing leaves a strong negative spike at lag
+                # s; start the seasonal MA near the value that absorbs it.
+                x0[1 + p + q + P] = -0.5
 
             def obj(x):
-                c, phi, theta = self._unpack(x)
+                c, phi, theta, Phi_, Theta_ = self._unpack(x)
+                phi_f, theta_f = self._expand(phi, theta, Phi_, Theta_)
                 with np.errstate(over="ignore", invalid="ignore"):
-                    e = self._css_resid(w, c, phi, theta)[m:]
+                    e = self._css_resid(w, c, phi_f, theta_f)[m:]
                     ssr = np.dot(e, e)
                 if not np.isfinite(ssr) or ssr <= 0:
                     return 1e12
                 return 0.5 * n_eff * np.log(ssr / n_eff + 1e-12)
 
-            bounds = [(None, None)] + [(-0.999, 0.999)] * (p + q)
+            bounds = [(None, None)] + [(-0.999, 0.999)] * (p + q + P + Q)
             res = minimize(obj, x0, method="L-BFGS-B", bounds=bounds)
-            self.c, self.phi, self.theta = self._unpack(res.x)
-            resid = self._css_resid(w, self.c, self.phi, self.theta)[m:]
+            self.c, self.phi, self.theta, self.Phi, self.Theta = self._unpack(res.x)
+            phi_full, theta_full = self._full()
+            resid = self._css_resid(w, self.c, phi_full, theta_full)[m:]
 
         self.resid_ = resid
         ssr = float(np.dot(resid, resid))
@@ -378,28 +548,31 @@ class ARIMA:
         definite at the optimum, typically a coefficient pinned near its
         stationarity/invertibility bound.
 
-        Returns {"c": se, "phi": [se, ...], "theta": [se, ...]}.
+        Returns {"c": se, "phi": [...], "theta": [...], "Phi": [...],
+        "Theta": [...]}.
         """
-        p, q = self.p, self.q
-        if q == 0:
+        p, q, P, Q = self.p, self.q, self.P, self.Q
+        if q == 0 and P == 0 and Q == 0:
             if p == 0 or self._XtX_inv is None:
                 se_c = float(np.sqrt(self.sigma2 / self.nobs)) if self.nobs else float("nan")
-                return {"c": se_c, "phi": [], "theta": []}
+                return {"c": se_c, "phi": [], "theta": [], "Phi": [], "Theta": []}
             se = np.sqrt(np.diag(self._XtX_inv) * self.sigma2)
-            return {"c": float(se[0]), "phi": se[1:].tolist(), "theta": []}
+            return {"c": float(se[0]), "phi": se[1:].tolist(), "theta": [],
+                    "Phi": [], "Theta": []}
 
         # Mixed ARMA: numerical Hessian of the CSS negative log-likelihood
         # (up to the parameter-independent constants of the Gaussian
         # log-likelihood, which don't affect the Hessian).
         w = self._w_train
-        m = max(p, q)
+        m = self._cond()
         n_eff = len(w) - m
-        k = 1 + p + q
+        k = 1 + p + q + P + Q
 
         def negloglik(x):
-            c, phi, theta = self._unpack(x)
+            c, phi, theta, Phi_, Theta_ = self._unpack(x)
+            phi_f, theta_f = self._expand(phi, theta, Phi_, Theta_)
             with np.errstate(over="ignore", invalid="ignore"):
-                e = self._css_resid(w, c, phi, theta)[m:]
+                e = self._css_resid(w, c, phi_f, theta_f)[m:]
                 ssr = np.dot(e, e)
             if not np.isfinite(ssr) or ssr <= 0:
                 return 1e12
@@ -431,26 +604,36 @@ class ARIMA:
             "c": float(se_all[0]),
             "phi": se_all[1:1 + p].tolist(),
             "theta": se_all[1 + p:1 + p + q].tolist(),
+            "Phi": se_all[1 + p + q:1 + p + q + P].tolist(),
+            "Theta": se_all[1 + p + q + P:1 + p + q + P + Q].tolist(),
         }
 
     # -- diagnostics ---------------------------------------------------------
     def _psi_weights(self, nmax):
-        """MA(infinity) weights of the integrated model phi(B)(1-B)^d / theta(B)."""
-        phi_poly = np.concatenate([[1.0], -self.phi]) if self.p else np.array([1.0])
+        """MA(infinity) weights of the integrated model
+        phi(B)PHI(B^s)(1-B)^d (1-B^s)^D / theta(B)THETA(B^s)."""
+        phi_full, theta_full = self._full()
+        phi_poly = (np.concatenate([[1.0], -phi_full]) if len(phi_full)
+                    else np.array([1.0]))
         diff_poly = np.array([1.0])
         for _ in range(self.d):
             diff_poly = np.convolve(diff_poly, [1.0, -1.0])
-        Phi = np.convolve(phi_poly, diff_poly)        # 1 - a1 B - a2 B^2 - ...
-        a = -Phi[1:]
-        P = len(a)
+        seasonal_op = np.zeros(self.s + 1)
+        seasonal_op[0], seasonal_op[self.s] = 1.0, -1.0
+        for _ in range(self.D):
+            diff_poly = np.convolve(diff_poly, seasonal_op)
+        ar_poly = np.convolve(phi_poly, diff_poly)    # 1 - a1 B - a2 B^2 - ...
+        a = -ar_poly[1:]
+        n_ar = len(a)
+        n_ma = len(theta_full)
         psi = np.zeros(nmax)
         psi[0] = 1.0
         for j in range(1, nmax):
             s = 0.0
-            for i in range(1, min(j, P) + 1):
+            for i in range(1, min(j, n_ar) + 1):
                 s += a[i - 1] * psi[j - i]
-            if 1 <= j <= self.q:
-                s += self.theta[j - 1]
+            if 1 <= j <= n_ma:
+                s += theta_full[j - 1]
             psi[j] = s
         return psi
 
@@ -471,22 +654,28 @@ class ARIMA:
             poly = np.concatenate([[1.0], -np.asarray(coef, dtype=float)])
             r = np.roots(poly[::-1])
             return sorted(np.abs(r).tolist())
-        # MA convention here is +theta, so use +theta for the MA polynomial
-        ma_poly = np.concatenate([[1.0], np.asarray(self.theta, dtype=float)]) if self.q else np.array([1.0])
-        ma_mod = sorted(np.abs(np.roots(ma_poly[::-1])).tolist()) if self.q else []
-        return {"ar": _moduli(self.phi), "ma": ma_mod}
+        # Roots of the expanded polynomials, so the seasonal factors are
+        # included: a multiplicative model is invertible only if both its
+        # non-seasonal and seasonal MA factors are.
+        phi_full, theta_full = self._full()
+        ma_poly = (np.concatenate([[1.0], theta_full]) if len(theta_full)
+                   else np.array([1.0]))
+        ma_mod = (sorted(np.abs(np.roots(ma_poly[::-1])).tolist())
+                  if len(theta_full) else [])
+        return {"ar": _moduli(phi_full), "ma": ma_mod}
 
     # -- forecasting ---------------------------------------------------------
     def _forecast_diff(self, w_hist, e_hist, k):
         """Recursive k-step forecast on the differenced scale."""
-        p, q = self.p, self.q
+        phi_full, theta_full = self._full()
+        p, q = len(phi_full), len(theta_full)
         y_ext = list(w_hist)
         e_ext = list(e_hist)
         preds = []
         for _ in range(k):
             idx = len(y_ext)
-            ar = sum(self.phi[j] * y_ext[idx - 1 - j] for j in range(p)) if p else 0.0
-            ma = sum(self.theta[j] * e_ext[idx - 1 - j] for j in range(q)) if q else 0.0
+            ar = sum(phi_full[j] * y_ext[idx - 1 - j] for j in range(p)) if p else 0.0
+            ma = sum(theta_full[j] * e_ext[idx - 1 - j] for j in range(q)) if q else 0.0
             val = self.c + ar + ma
             preds.append(val)
             y_ext.append(val)
@@ -507,10 +696,11 @@ class ARIMA:
         point. This is the single-origin form of :meth:`rolling_kstep`.
         """
         y_hist = np.asarray(y_hist, dtype=float)
-        w = difference(y_hist, self.d)
-        e = self._css_resid(w, self.c, self.phi, self.theta)
+        w = apply_differencing(y_hist, self.d, self.D, self.s)
+        phi_full, theta_full = self._full()
+        e = self._css_resid(w, self.c, phi_full, theta_full)
         w_fcst = self._forecast_diff(w, e, k)
-        return integrate_forecasts(y_hist, w_fcst, self.d)
+        return invert_differencing(y_hist, w_fcst, self.d, self.D, self.s)
 
     def rolling_kstep(self, y_full, k, start_idx):
         """
@@ -521,19 +711,24 @@ class ARIMA:
         Returns (targets_index, y_pred) arrays aligned on the forecast target.
         """
         y_full = np.asarray(y_full, dtype=float)
-        w_full = difference(y_full, self.d)
-        e_full = self._css_resid(w_full, self.c, self.phi, self.theta)
+        w_full = apply_differencing(y_full, self.d, self.D, self.s)
+        phi_full, theta_full = self._full()
+        e_full = self._css_resid(w_full, self.c, phi_full, theta_full)
         n = len(y_full)
         origins = []
         preds = []
+        # Differencing shortens the series by d + s*D, so the differenced index
+        # corresponding to level-scale origin t is offset by that much.
+        offset = self.d + self.s * self.D
         for t in range(start_idx - 1, n - k):
-            nd = t - self.d  # last available differenced index
-            if nd < max(self.p, self.q):
+            nd = t - offset  # last available differenced index
+            if nd < self._cond():
                 continue
             w_hist = w_full[: nd + 1]
             e_hist = e_full[: nd + 1]
             w_fcst = self._forecast_diff(w_hist, e_hist, k)
-            y_fcst = integrate_forecasts(y_full[: t + 1], w_fcst, self.d)
+            y_fcst = invert_differencing(y_full[: t + 1], w_fcst, self.d,
+                                         self.D, self.s)
             origins.append(t + k)
             preds.append(y_fcst[-1])
         return np.array(origins), np.array(preds)

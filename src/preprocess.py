@@ -119,6 +119,64 @@ def inv_log_transform(log_flow: np.ndarray) -> np.ndarray:
     return np.exp(np.asarray(log_flow, dtype=float))
 
 
+def seasonal_profile(values: np.ndarray, months: np.ndarray, period: int = 12) -> dict:
+    """
+    Mean and standard deviation of the series for each position in the annual
+    cycle -- twelve of each, at a monthly timestep.
+
+    This is the seasonal component of the classical stochastic-hydrology
+    generating model (Salas et al., 1980): the twelve monthly means describe
+    the shape of the average year and the twelve standard deviations describe
+    how variable each month is, both estimated on the log scale from the
+    training period only.
+    """
+    values = np.asarray(values, dtype=float)
+    months = np.asarray(months, dtype=int)
+    means = np.zeros(period)
+    sds = np.zeros(period)
+    for k in range(period):
+        block = values[months == k + 1]
+        if len(block) == 0:
+            raise ValueError(f"No observations for position {k + 1} of the cycle.")
+        means[k] = block.mean()
+        sds[k] = block.std(ddof=1) if len(block) > 1 else 1.0
+    sds[sds <= 0] = 1.0
+    return {"means": means.tolist(), "sds": sds.tolist(), "period": int(period)}
+
+
+def deseasonalise(values: np.ndarray, months: np.ndarray, profile: dict) -> np.ndarray:
+    """
+    Remove the annual cycle: z = (x - mean_month) / sd_month.
+
+    Standardising by month is what makes the residual series stationary, and
+    therefore what makes a synthetic record of arbitrary length well defined.
+    Seasonal differencing, x(t) - x(t-12), also removes the cycle but leaves an
+    integrated process whose variance grows without bound, so it cannot be used
+    to generate one (see Section 4.2).
+    """
+    means = np.asarray(profile["means"], dtype=float)
+    sds = np.asarray(profile["sds"], dtype=float)
+    idx = np.asarray(months, dtype=int) - 1
+    return (np.asarray(values, dtype=float) - means[idx]) / sds[idx]
+
+
+def reseasonalise(z: np.ndarray, months: np.ndarray, profile: dict) -> np.ndarray:
+    """Inverse of :func:`deseasonalise`: x = z * sd_month + mean_month.
+
+    Accepts z of shape (n,) or (n_reps, n); months is indexed along the last
+    axis.
+    """
+    means = np.asarray(profile["means"], dtype=float)
+    sds = np.asarray(profile["sds"], dtype=float)
+    idx = np.asarray(months, dtype=int) - 1
+    return np.asarray(z, dtype=float) * sds[idx] + means[idx]
+
+
+def cycle_months(n: int, start_month: int = 1, period: int = 12) -> np.ndarray:
+    """Month-of-year labels (1..period) for n consecutive steps."""
+    return (np.arange(n) + (start_month - 1)) % period + 1
+
+
 def build_dataset(zip_path: Path = CAMELS_ZIP) -> pd.DataFrame:
     """
     Return the analysis-ready daily series 1980-2014 with columns:

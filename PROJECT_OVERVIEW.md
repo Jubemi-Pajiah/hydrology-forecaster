@@ -16,21 +16,125 @@ Hydrological Forecasting"*.
 - **Supervisor:** Prof. K. O. Aiyesimoju
 - **Submission:** February 2026
 
-In simple terms: it's **three computer programs, each learning one river variable's own
-habits** — discharge, rainfall, and stage — from decades of monthly history, and using
-that to generate plausible future sequences. No variable is used to predict another,
-and no weather forecast is consumed. The approach is purely **statistical**, and it is
-deliberately **stochastic**: it does not claim to predict the one true future, only the
-*range* of futures the river could plausibly produce, which is what actually matters for
-sizing a reservoir or a spillway.
+In simple terms: it **learns the habits of one river's monthly discharge** from 35 years
+of measurements, and then **writes out a much longer record of the same river** — 100
+years, 1,000 years, however many you ask for. No rainfall input, no weather forecast, no
+routing: discharge is modelled from its own past alone.
+
+The point is not to say what next January's flow will be. It is that a spillway sized
+against a 1-in-100-year flood cannot be designed from 35 annual maxima. Generating 1,000
+years gives 1,000 annual maxima drawn from the same statistical behaviour, so the design
+flow can be **counted rather than guessed**.
+
+> **The output is a long table of monthly values, not a forecast for a date.** The app
+> deliberately cannot be asked for the discharge of a named future month. Anything that
+> reintroduces a "predict from X to Y" framing is a regression — see the 2026-08-19
+> section below.
 
 ---
 
-## 🔁 What changed on 2026-08-12 (read this first)
+## 🔥 What changed on 2026-08-19 (read this first)
+
+The supervisor reviewed the **live app** by phone and rejected it. Three demands, and
+what was done about each.
+
+**1. "That's no use to us! It's the whole range!"** — he opened the app, saw a value for
+one chosen month, and rejected the entire framing. He wants *"a long table"* of every
+month for a user-specified number of years, because the engineering purpose is reading
+extremes off a long record. **Done:** the app now asks for one number (how many years)
+and returns the record itself, one row per month, downloadable as CSV. 1,000 years =
+12,000 rows. There is no date control of any kind any more.
+
+> Worth knowing: the old date range was not merely unhelpful, it was **meaningless**. The
+> fitted process is stationary, so every window of a given length is identically
+> distributed — asking for 2030–2035 vs 2050–2055 returned statistically the same thing.
+> The app was already generating synthetic record; only the UI pretended otherwise.
+
+**2. "Monthly cannot be zero... it's ARIMA, not ARMA"**, followed by a message
+specifying the differencing factor should be **12**. This is the one place the project
+**deliberately does not follow the literal instruction**, and the reasoning has to be
+defended:
+
+- He is right that the annual cycle must go, and right that ordinary differencing cannot
+  remove it. At this gauge the 12 monthly means carry ~50% of the variance.
+- But his two demands are **mathematically incompatible**. Differencing at lag 12 leaves
+  an *integrated* process — rebuilding the flow needs a running total, and a running
+  total of random terms is a random walk whose spread grows without bound. Over the
+  1,000 years he asked for it drifts to **3.2e+11 m³/s** against an
+  observed mean of 16.4, a factor of **3.9e+11** from first
+  decade to last. A generating model must be stationary.
+- **Done:** the cycle is removed by **seasonal standardisation** (12 monthly means +
+  12 standard deviations) instead. It removes the same thing, stays stationary, is the
+  classical stochastic-hydrology treatment (Salas et al. 1980), and still puts **12** at
+  the centre of the model — as 12 pairs of parameters rather than a differencing lag.
+- The lag-12 model is **fully implemented and fitted on every run**. Report §4.2 Table 2
+  and the app's "For the curious" panel show the two side by side. *That table is the
+  answer if he asks why.*
+- Supporting diagnostic: the fitted seasonal MA came out at **Θ ≈ -0.88**.
+  Being driven toward −1 means the model is itself reporting the differencing was
+  unnecessary.
+- Do **not** compare the two AIC values — they are computed on different transformations
+  of the series.
+
+**3. Discharge only**, confirmed in writing. Rainfall and stage survive in one place,
+§4.7, where the identical unmodified program is run on all three and selects a different
+order for each — his own point that *"the order of discharge cannot be the order of
+rainfall, cannot be the order of stock."*
+
+### What this fixed as a side effect
+
+Treating the cycle explicitly **resolved a defect the old version reported as a
+limitation**. Ljung–Box used to reject white-noise residuals for discharge (p = 0.0035)
+and stage (p = 0.0011). All three now pass (0.344, 0.680, 0.286).
+The selected models are also *smaller* than before, not larger.
+
+### The numbers now
+
+| | Old | New |
+|---|---|---|
+| Discharge model | ARIMA(4,0,1) | 12 seasonal params + ARIMA(1, 0, 1) |
+| Ljung–Box | 0.0035 ✗ | **0.344 ✓** |
+| 1,000-yr generation | impossible (drifts) | **~0.4 s**, drift ratio 0.95 |
+| Property validation | 7/7 | 6/7 (see below) |
+| Innovations | Gaussian | bootstrapped residuals |
+
+**Design discharges** (from 50,000 synthetic annual maxima): 2-yr
+44, 10-yr 102, 100-yr 239, 500-yr 416 m³/s.
+The 10-year value lands on the largest month actually measured in 35 years
+(110 m³/s) — the main external check that the extrapolation is calibrated.
+
+**Never quote the record maximum (1413 m³/s) as a design figure.** It is the
+most extreme of 50,000 simulated years from a log-linear model with no
+upper bound. Return periods only.
+
+### Why validation went 7/7 → 6/7
+
+The model got **sharper**, not worse. The old one did not model seasonality explicitly,
+so its simulated seasonal range was wide enough to swallow the observed value. Now the
+range is tight and the observed value falls outside — because the annual cycle at this
+gauge **genuinely weakened** over the record:
+
+| Period | Discharge amplitude (m³/s) | Stage amplitude (m) |
+|---|---|---|
+| 1980–89 | 35.2 | 1.80 |
+| 1990–99 | 43.5 | 1.88 |
+| 2000–09 | 29.8 | 1.41 |
+| 2004–14 (validation) | 25.8 | 1.37 |
+
+Both variables decline together, as two measurements of one hydraulic signal should. The
+failing check is detecting a real change in the river, not a fault in the fit. Reported
+rather than hidden (§4.6).
+
+---
+
+## 🔁 What changed on 2026-08-12 (the earlier pivot)
 
 The whole modelling approach pivoted, per the supervisor's direct feedback (a
-defence-style meeting): **monthly** instead of daily timestep (differencing only does
-real work — removing seasonality — at a monthly step, not a daily one); **three
+defence-style meeting): **monthly** instead of daily timestep (a monthly step is what
+makes the differencing order a meaningful thing to test at all — it strips daily noise
+and exposes the annual cycle and any slow drift; note that ordinary differencing removes
+trend/drift, *not* annual seasonality, which needs seasonal differencing or SARIMA);
+**three
 independent variables** (discharge, rainfall, stage) instead of discharge alone, to
 demonstrate the same ARIMA machinery generalises across variable types; and
 **stochastic, property-based validation** instead of comparing one forecast to the one
@@ -60,17 +164,48 @@ per variable from the data itself, not from preference. → *Report Ch.2 §2.4.*
 **Q: "Why are you using daily data with ARIMA? You won't gain anything from the
 differencing... but if you difference monthly flows, you actually gain something,
 because it removes the seasonality."**
-A: Fixed, exactly along those lines — the whole pipeline now runs at a monthly
-timestep. Daily discharge doesn't have a seasonal cycle for differencing to usefully
-remove; monthly does. → *Report Ch.1 §1.5, Ch.3 §3.1.*
+A: Fixed — the whole pipeline now runs at a monthly timestep. Stated precisely:
+ordinary differencing, X(t) − X(t−1), removes trend or slow drift, and a daily river
+doesn't meaningfully trend inside one day, so at a daily step the operation has almost
+nothing to do. It does *not* by itself remove an annual seasonal cycle — that needs
+seasonal differencing, X(t) − X(t−12), or SARIMA terms. What monthly aggregation does is
+strip daily noise and expose the annual cycle and any drift, so the differencing order
+becomes a meaningful quantity to test. In the event the tests selected **d = 0** for all
+three variables, so these models don't difference at all, and the seasonal structure
+remaining in the discharge/stage residuals is the reason SARIMA is the leading item of
+further work. → *Report Ch.1 §1.5, Ch.3 §3.1, Ch.4 §4.2.*
 
 **Q: "How do you estimate the parameters? The p, d, q you mentioned are not the
 parameters — that's just the order. How do you estimate the autoregressive component?
 The moving average parameters? How did you get it?"**
 A: p, d, q are the order (structure), chosen by AIC. The actual parameters — the AR
-(phi) and MA (theta) coefficients — are estimated by conditional sum of squares, and
-every one is reported with a standard error, not just a value. → *Report Ch.3 §3.5,
-Ch.4 Table 5; app "For the curious" panel.*
+(phi) and MA (theta) coefficients — are estimated by **conditional sum of squares**,
+which in plain terms works like this: try a set of candidate coefficients; walk through
+the training record month by month, using the model to predict each month from the
+months before it; take the gap between prediction and reality as that month's error;
+square all the errors and add them up; then search for the coefficients that make that
+total as small as possible.
+
+It's called **conditional** because of how it starts. The first few months have nothing
+before them to predict from, and the MA part needs earlier errors that don't exist yet,
+so those opening observations are taken as given, the unknown earlier errors are set to
+zero, and scoring only begins at the first month that can genuinely be predicted — so
+the estimate is conditional on that starting assumption. (With 288 training months and
+at most 4–5 start-up months, it makes no practical difference, but it *is* an assumption
+and is named rather than hidden.)
+
+Whether a search is even needed depends on the model. With **no MA term** the errors
+depend on the coefficients linearly, so the minimum has an exact closed-form solution —
+ordinary least squares, no searching. That covers **rainfall** ARIMA(1,0,0) and **stage**
+ARIMA(4,0,0). **Discharge** ARIMA(4,0,1) is the only one with an MA term, where errors
+are built recursively (each depends on the ones before it), so there is no exact formula
+and the minimum is found numerically. Same principle either way.
+
+Every coefficient is reported with a standard error, not just a value — which matters,
+because rainfall's single coefficient turns out *not* to be statistically
+distinguishable from zero, and that is stated rather than glossed over. → *Report Ch.3
+§3.5, Ch.4 §4.4 (Table 5, Fig.5); `src/model.py` `_css_resid`; app "For the curious"
+panel.*
 
 **Q: "Can you even forecast? 'I can only forecast 7 days' — that's terrible. Why?"**
 A: That was a real bug (a leftover default), now removed. The app forecasts any
@@ -85,8 +220,8 @@ within the range a 1,000-member synthetic ensemble produces. → *Report §3.6, 
 
 **Q: "The data is bulky — 35 years, 365 days a year — is that bulky for a computer?"**
 A: Not for a computer, no, and that was never really the constraint. The reason the
-project moved to monthly wasn't data volume — it was that differencing only does
-useful work (removing seasonal drift) at a monthly step, which is the point made two
+project moved to monthly wasn't data volume — it was that a monthly step is where the
+differencing order becomes a meaningful thing to test, which is the point made two
 questions above.
 
 **Q: "Which year to which year did you use — 1980 to 2014?"**
@@ -98,10 +233,18 @@ Ch.3 §3.4.*
 forecast is different, so how can you compare it to 2015? It's meaningless. You can
 only compare the parameters — the properties — of what you forecast to the properties
 of the original data."**
-A: Agreed, and that's exactly the current validation design: the project never compares
-one synthetic run to the one thing that actually happened. It compares the ensemble's
-statistical properties to history's. This is the core idea of the whole 2026-08-12
-rebuild. → *Report §4.6, Table 7.*
+A: That is the current validation design: the project never compares one synthetic run
+to the one thing that actually happened; it compares the ensemble's statistical
+properties to history's. This is the core idea of the whole 2026-08-12 rebuild. One
+qualification, stated so it isn't raised against us: "meaningless" is too absolute. What
+is inappropriate is judging a *single* random realisation as though it were a
+deterministic forecast. The observation *can* legitimately be scored against the full
+predictive distribution — prediction-interval coverage, CRPS, the logarithmic score,
+calibration plots, rank histograms, the Brier score for threshold events. Property-based
+validation is one such distribution-level comparison, chosen because the properties it
+tests are the ones water-resources design depends on; those other scores are
+complementary to it, not excluded by it, and are listed as future work. → *Report §3.6,
+§4.6 (Table 7), §5.4.*
 
 **Q: "Why are you using whatever river in the US? Have you checked for monthly data in
 Nigeria that you didn't find?"**
@@ -194,6 +337,58 @@ app screenshots in Chapter 3 (Figures 3 and 4) were retaken from the current app
 
 ---
 
+## ✏️ What was corrected on 2026-08-15 (seven imprecise claims)
+
+A third review pass — this time over the overview document and the *live app* rather
+than the thesis text — found seven statements that were defensible in spirit but
+imprecise, over-absolute, or mutually inconsistent as written. All seven are now fixed in
+the report, this document, the overview PDF/DOCX, and the app. Each is a plausible
+defence question, so the corrected position is the one to give:
+
+1. **Ordinary differencing does not remove monthly seasonality.** X(t) − X(t−1) removes
+   trend or slow drift. An annual cycle needs *seasonal* differencing, X(t) − X(t−12), or
+   SARIMA terms. Monthly aggregation makes the differencing order testable and exposes
+   the annual cycle; it does not turn ordinary differencing into a seasonal filter. The
+   tests selected **d = 0** for all three variables, so these models don't difference at
+   all, and the leftover seasonal structure is exactly why SARIMA is the top future-work
+   item.
+2. **Don't claim all three models fit well.** Residuals should resemble white noise.
+   Ljung–Box **rejects** that null for discharge (p = 0.0035) and stage (p = 0.0011), and
+   does **not** reject it for rainfall (p = 0.9602). Rainfall has the cleanest fit;
+   discharge and stage retain unexplained temporal structure.
+3. **7/7 is not an accuracy grade.** It means seven selected historical properties fell
+   inside the simulated 90% envelopes — evidence of *property reproduction*. Not
+   point-forecast accuracy, not a percentage correct, not prediction error, not the
+   reliability of any individual future value. The phrase "the closest thing this model
+   has to an accuracy grade" has been removed from the app.
+4. **Stochastic forecasts *can* be compared with observations.** Judging one random
+   realisation as if it were deterministic is what's wrong. The observation can be scored
+   against the full predictive distribution: interval coverage, CRPS, log score,
+   calibration plots, rank histograms, Brier score. Property matching is one such
+   distribution-level check; the rest are complementary and now cited as future work.
+5. **Cross-basin claim made consistent.** The report says the procedure was rerun on two
+   extra basins; the app's limitations table said transfer was "untested". The app now
+   carries the same qualified position as the report — the *procedure* transfers, the
+   *specific findings* didn't universally repeat, two of four extra fits showed numerical
+   warning signs, and the full stochastic validation still covers the primary basin only.
+6. **Long-range forecasts are highly conditional.** The app accepts target years out to
+   2200; ARIMA is defined there, but a year-2200 hydrological forecast is not reliable. It
+   assumes the 1980–2003 process continues unchanged despite climate change, land-use
+   change, reservoir construction, river engineering, urbanisation, and gauge or
+   measurement changes. Long-range output is now presented as a **synthetic scenario**
+   consistent with the basin's historical statistics — what a design calculation actually
+   needs — not as a prediction. The app shows an explicit warning past ~25 years out.
+7. **Log back-transformation — verified against the code.** Exponentiating an expected
+   log value gives roughly a *median*, not the arithmetic mean, so a retransformation
+   correction would normally be needed. It isn't needed here: `src/simulate.py`
+   exponentiates each of the 1,000 paths **individually**, and all statistics are computed
+   afterwards on the natural-scale ensemble, so Monte Carlo integration handles the
+   log-normal skew and the ensemble mean is unbiased by construction. Duan's smearing
+   factor is a stored diagnostic that multiplies nothing. The app's single line through
+   the band is the ensemble **median** and is now labelled as such, not "expected path".
+
+---
+
 ## ❓ Questions to expect, and where the answer lives
 
 Every question below is one the supervisor has actually asked, in the defence session
@@ -216,17 +411,25 @@ the fast-reference version.
 
 **On daily vs. monthly**
 
-- **"Why daily data with ARIMA?"** We're not using daily anymore. Differencing only
-  does real work — removing seasonal drift — at a monthly timestep. → *App left rail;
-  Report Ch.1 §1.5, Ch.3 §3.1.*
+- **"Why daily data with ARIMA?"** We're not using daily anymore. Ordinary differencing
+  removes trend/slow drift, and a daily river doesn't trend inside a day, so it has
+  nothing to do there. A monthly step is what makes the differencing order testable —
+  it does *not* make ordinary differencing a seasonal filter (that needs X(t) − X(t−12)
+  or SARIMA), and the tests selected d = 0 anyway. → *App left rail; Report Ch.1 §1.5,
+  Ch.3 §3.1, Ch.4 §4.2.*
 
 **On parameter estimation (asked the most, and the most pointed)**
 
 - **"How do you estimate the parameters? p,d,q aren't the parameters."** Correct — p,d,q
   are the *order* (structure), chosen by AIC. The actual parameters are the phi (AR) and
-  theta (MA) coefficients, estimated by conditional sum of squares, each with a standard
-  error. → *App "For the curious" → coefficient table per variable. Report Ch.3 §3.5,
-  Ch.4 §4.4 (Table 5, Fig.5).*
+  theta (MA) coefficients, estimated by conditional sum of squares: try candidate
+  coefficients, predict each training month from the months before it, add up the squared
+  prediction errors, keep whichever coefficients make that total smallest. "Conditional"
+  because the opening months have nothing before them to predict from, so they're taken
+  as given and scoring starts after them. No MA term (rainfall, stage) → exact ordinary
+  least squares, no search; discharge has an MA term → numerical search. Each coefficient
+  carries a standard error. → *App "For the curious" → coefficient table per variable.
+  Report Ch.3 §3.5, Ch.4 §4.4 (Table 5, Fig.5).*
 - **"You must show the data fits ARIMA, not assume it."** Each variable runs through
   ADF and KPSS stationarity tests before a model is picked, and the result is shown, not
   just the conclusion. → *App "For the curious" → stationarity evidence line. Report

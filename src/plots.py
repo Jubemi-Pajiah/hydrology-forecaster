@@ -8,7 +8,7 @@ ARIMA models; none depends on cross-variable input. Figures are written to
 figures/ at 300 DPI.
 
   Fig 1 : Monthly time series, all three variables, train/validation split
-  Fig 2 : ACF and PACF of each variable's (differenced) training series
+  Fig 2 : ACF and PACF of each variable's deseasonalised training series
   Fig 3 : Stochastic ensemble vs the historical validation record
   Fig 4 : Property-based validation -- historical value vs. synthetic
           ensemble envelope, normalised to the ensemble median
@@ -75,7 +75,7 @@ def fig1_monthly_series(artifacts, path=FIG_DIR / "Fig1_DischargeTimeSeries.png"
 
 
 def fig2_acf_pacf(artifacts, nlags=24, path=FIG_DIR / "Fig2_ACF_PACF.png"):
-    """ACF/PACF of each variable's (differenced) training series -- model
+    """ACF/PACF of each variable's deseasonalised training series -- model
     identification evidence, one row per variable."""
     fig, axes = plt.subplots(3, 2, figsize=(11, 9.5))
     for row, v in enumerate(VARIABLES_ORDER):
@@ -90,7 +90,8 @@ def fig2_acf_pacf(artifacts, nlags=24, path=FIG_DIR / "Fig2_ACF_PACF.png"):
         ax1.axhline(0, color="k", lw=0.8)
         ax1.axhline(ci, color=_RED, ls="--", lw=1)
         ax1.axhline(-ci, color=_RED, ls="--", lw=1)
-        ax1.set_title(f"{v.capitalize()}: ACF (d={artifacts[v]['d']})", fontsize=10)
+        ax1.set_title(f"{v.capitalize()}: ACF (deseasonalised, d={artifacts[v]['d']})",
+                      fontsize=10)
         ax1.set_xlabel("Lag (months)"); ax1.set_ylabel("ACF")
 
         ax2.bar(lags, p, width=0.3, color=_GREEN)
@@ -223,7 +224,7 @@ def fig6_parameter_estimates(artifacts, path=FIG_DIR / "Fig6_SkillVsLead.png"):
         ax.axvline(0, color="k", lw=0.8, ls=":")
         ax.set_yticks(ys); ax.set_yticklabels(labels, fontsize=11)
         ax.set_xlabel("Coefficient value")
-        ax.set_title(f"{v.capitalize()}: ARIMA{model.order}", fontsize=11)
+        ax.set_title(f"{v.capitalize()}: {model.label()}", fontsize=11)
         ax.invert_yaxis()
     fig.suptitle("Estimated AR/MA coefficients, 95% confidence intervals "
                   "(blue = excludes zero)", fontsize=10)
