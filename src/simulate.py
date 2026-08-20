@@ -18,40 +18,56 @@ starts, then integrating back through any differencing and the log transform.
 
 import numpy as np
 
-from .model import ARIMA, integrate_forecasts
-from .preprocess import inv_log_transform
+from .model import ARIMA, invert_differencing
+from .preprocess import cycle_months, inv_log_transform, reseasonalise
 
 BURN_IN = 200
 
 
 def _simulate_w(model: ARIMA, n_periods: int, n_reps: int, rng, method: str) -> np.ndarray:
     """Simulate n_reps realisations of the (possibly differenced) log-scale
-    series w, each of length n_periods, via the fitted ARMA recursion."""
-    p, q = model.p, model.q
-    phi, theta, c, sigma2 = model.phi, model.theta, model.c, model.sigma2
-    total = BURN_IN + n_periods
+    series w, each of length n_periods, via the fitted ARMA recursion.
 
-    if method == "bootstrap":
+    The recursion is stepped once per time point across all realisations at
+    once, rather than once per realisation: the innovations are drawn as an
+    (n_reps, total) block and each step is a matrix-vector product. Generating
+    a thousand years of monthly values is the normal use of this module, so
+    the per-realisation Python loop it replaces was the dominant cost.
+
+    Coefficients come from the model's *expanded* polynomials, so a
+    multiplicative seasonal term is simulated by the same recursion as a
+    non-seasonal one.
+    """
+    phi, theta = model._full()
+    p, q = len(phi), len(theta)
+    c, sigma2 = model.c, model.sigma2
+
+    # Enough burn-in for the process to reach its stationary distribution.
+    # A seasonal model needs it measured in cycles, not months.
+    burn = max(BURN_IN, 20 * model.s * max(1, model.Q + model.P)) if model.s else BURN_IN
+    total = burn + n_periods
+
+    if method == "gaussian":
+        E = rng.normal(0.0, np.sqrt(sigma2), size=(n_reps, total))
+    elif method == "bootstrap":
         resid_pool = model.resid_
-        if len(resid_pool) < 2:
+        if resid_pool is None or len(resid_pool) < 2:
             raise ValueError("Residual pool too small to bootstrap from.")
+        E = rng.choice(resid_pool, size=(n_reps, total), replace=True)
+    else:
+        raise ValueError(f"Unknown innovation method {method!r}")
 
-    sims = np.zeros((n_reps, total))
-    for r in range(n_reps):
-        if method == "gaussian":
-            e = rng.normal(0.0, np.sqrt(sigma2), total)
-        elif method == "bootstrap":
-            e = rng.choice(resid_pool, size=total, replace=True)
-        else:
-            raise ValueError(f"Unknown innovation method {method!r}")
-
-        w = np.zeros(total)
-        for t in range(total):
-            ar = np.dot(phi, w[t - p:t][::-1]) if p and t >= p else 0.0
-            ma = np.dot(theta, e[t - q:t][::-1]) if q and t >= q else 0.0
-            w[t] = c + ar + ma + e[t]
-        sims[r] = w
-    return sims[:, BURN_IN:]
+    W = np.zeros((n_reps, total))
+    phi_rev = phi[::-1].copy()
+    theta_rev = theta[::-1].copy()
+    for t in range(total):
+        val = c + E[:, t]
+        if p and t >= p:
+            val = val + W[:, t - p:t] @ phi_rev
+        if q and t >= q:
+            val = val + E[:, t - q:t] @ theta_rev
+        W[:, t] = val
+    return W[:, burn:]
 
 
 def simulate_ensemble(model: ARIMA, y_hist: np.ndarray, n_periods: int,
@@ -83,13 +99,74 @@ def simulate_ensemble(model: ARIMA, y_hist: np.ndarray, n_periods: int,
     rng = np.random.default_rng(seed)
     sims_w = _simulate_w(model, n_periods, n_reps, rng, method)
 
-    if model.d > 0:
+    if model.d > 0 or model.D > 0:
         y_hist = np.asarray(y_hist, dtype=float)
-        sims_log = np.array([integrate_forecasts(y_hist, w, model.d) for w in sims_w])
+        needed = model.d + model.s * model.D
+        if len(y_hist) < needed + 1:
+            raise ValueError(
+                f"y_hist has {len(y_hist)} values; at least {needed + 1} are "
+                f"needed to anchor the integration of d={model.d}, "
+                f"D={model.D} at period {model.s}."
+            )
+        sims_log = invert_differencing(y_hist, sims_w, model.d, model.D, model.s)
     else:
         sims_log = sims_w
 
     return inv_log_transform(sims_log)
+
+
+def generate_synthetic_record(model: ARIMA, n_years: int, profile: dict,
+                              n_reps: int = 1, method: str = "gaussian",
+                              seed: int = None, start_month: int = 1,
+                              y_hist: np.ndarray = None, n_periods: int = None):
+    """
+    Generate a synthetic monthly record of arbitrary length -- the operational
+    purpose of the whole model.
+
+    A gauged record of 35 years is a short sample of the river's behaviour.
+    Fitting a model to it and generating a much longer record from that model
+    yields a sequence with the same statistical properties but many more
+    realisations of the rare events a design must survive, which is what
+    sizing a reservoir, spillway or channel actually needs. The generated
+    record is not a prediction of particular future months; it is an extended
+    sample of the same process.
+
+    Parameters
+    ----------
+    model       : ARIMA fitted to the deseasonalised log-scale series
+    n_years     : length of the record to generate, in years. Any value; the
+                  cost is linear in n_years.
+    profile     : seasonal profile from preprocess.seasonal_profile, used to
+                  put the annual cycle back on
+    n_reps      : number of independent records to generate
+    start_month : month of the year the record starts in (1 = January)
+    y_hist      : deseasonalised log-scale history, required only if the model
+                  itself applies differencing
+
+    Returns
+    -------
+    (record, months) where record has shape (n_reps, n_years * 12) in natural
+    units and months gives the month-of-year of each column.
+    """
+    period = int(profile.get("period", model.s or 12))
+    if n_periods is None:
+        n_periods = int(n_years) * period
+    n_periods = int(n_periods)
+    if n_periods <= 0:
+        raise ValueError("The record to generate must be at least one step long.")
+
+    rng = np.random.default_rng(seed)
+    z = _simulate_w(model, n_periods, n_reps, rng, method)
+
+    if model.d > 0 or model.D > 0:
+        if y_hist is None:
+            raise ValueError("y_hist is required when the model differences.")
+        z = invert_differencing(np.asarray(y_hist, dtype=float), z,
+                                model.d, model.D, model.s)
+
+    months = cycle_months(n_periods, start_month=start_month, period=period)
+    log_record = reseasonalise(z, months, profile)
+    return inv_log_transform(log_record), months
 
 
 if __name__ == "__main__":
