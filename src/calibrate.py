@@ -127,13 +127,25 @@ def choose_differencing(y, max_d: int = 2, s: int = SEASONAL_PERIOD,
 
 def select_order(y, p_range=range(0, 5), d_values=(None,), q_range=range(0, 3),
                  max_d: int = 2, D=None, s: int = SEASONAL_PERIOD,
-                 max_D: int = 1, Q_range=None):
+                 max_D: int = 1, Q_range=None, min_ar_root: float = None):
     """
     Grid-search ARIMA orders by AIC.
 
     If d_values is (None,), the differencing operator is chosen automatically
     by :func:`choose_differencing`; otherwise the supplied d values are
     searched. D may likewise be pinned by the caller or left to the data.
+
+    ``min_ar_root`` imposes a stationarity margin: candidates whose smallest
+    autoregressive characteristic root lies closer to the unit circle than the
+    given modulus are excluded from selection. This matters because the model
+    is not fitted in order to describe the observed record but in order to
+    GENERATE a record hundreds of times longer than it. On a strongly seasonal
+    record, information criteria happily prefer a high-order autoregression
+    whose roots sit at 1.00 to four decimal places: such a model is
+    indistinguishable from a stationary one over the 26 years of data, and
+    explodes over a thousand years of simulation. The constraint is a
+    statement of what the model is for, and it is reported alongside the
+    unconstrained ranking so the cost in AIC is visible.
 
     Only (p, q) are searched: the differencing orders are settled beforehand
     on the stationarity and seasonality evidence, not by information criteria,
@@ -187,15 +199,25 @@ def select_order(y, p_range=range(0, 5), d_values=(None,), q_range=range(0, 3),
                         model = ARIMA((p, d, q), seasonal_order, s).fit(y, cond=cond)
                         if not np.isfinite(model.aic_c):
                             continue
+                        ar_roots = model.roots()["ar"]
+                        min_root = float(min(ar_roots)) if ar_roots else float("inf")
+                        admissible = (min_ar_root is None
+                                      or min_root > float(min_ar_root))
                         table.append({"order": (p, d, q),
                                       "seasonal_order": seasonal_order,
                                       "label": model.label(),
-                                      "aic": model.aic_c, "bic": model.bic_c})
-                        if best is None or model.aic_c < best[1]:
+                                      "aic": model.aic_c, "bic": model.bic_c,
+                                      "min_ar_root": min_root,
+                                      "stationary_margin_ok": bool(admissible)})
+                        if admissible and (best is None or model.aic_c < best[1]):
                             best = ((p, d, q), model.aic_c, model)
                     except Exception:
                         continue
 
     table.sort(key=lambda r: r["aic"])
+    if best is None:
+        raise ValueError(
+            "No candidate satisfied the stationarity margin "
+            f"min_ar_root > {min_ar_root}; widen the order grid or relax it.")
     best_order, _, best_model = best
     return best_order, best_model, table, diff_info

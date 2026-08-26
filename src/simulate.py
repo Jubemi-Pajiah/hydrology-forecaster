@@ -72,7 +72,7 @@ def _simulate_w(model: ARIMA, n_periods: int, n_reps: int, rng, method: str) -> 
 
 def simulate_ensemble(model: ARIMA, y_hist: np.ndarray, n_periods: int,
                        n_reps: int = 500, method: str = "gaussian",
-                       seed: int = None) -> np.ndarray:
+                       seed: int = None, offset: float = 0.0) -> np.ndarray:
     """
     Generate an ensemble of synthetic realisations on the natural (level)
     scale, continuing on from the end of y_hist.
@@ -112,13 +112,14 @@ def simulate_ensemble(model: ARIMA, y_hist: np.ndarray, n_periods: int,
     else:
         sims_log = sims_w
 
-    return inv_log_transform(sims_log)
+    return inv_log_transform(sims_log, offset=offset)
 
 
 def generate_synthetic_record(model: ARIMA, n_years: int, profile: dict,
                               n_reps: int = 1, method: str = "gaussian",
                               seed: int = None, start_month: int = 1,
-                              y_hist: np.ndarray = None, n_periods: int = None):
+                              y_hist: np.ndarray = None, n_periods: int = None,
+                              offset: float = 0.0):
     """
     Generate a synthetic monthly record of arbitrary length -- the operational
     purpose of the whole model.
@@ -142,6 +143,8 @@ def generate_synthetic_record(model: ARIMA, n_years: int, profile: dict,
     start_month : month of the year the record starts in (1 = January)
     y_hist      : deseasonalised log-scale history, required only if the model
                   itself applies differencing
+    offset      : the constant added before the log transform, removed again
+                  on back-transformation (zero for a perennial river)
 
     Returns
     -------
@@ -166,7 +169,7 @@ def generate_synthetic_record(model: ARIMA, n_years: int, profile: dict,
 
     months = cycle_months(n_periods, start_month=start_month, period=period)
     log_record = reseasonalise(z, months, profile)
-    return inv_log_transform(log_record), months
+    return inv_log_transform(log_record, offset=offset), months
 
 
 if __name__ == "__main__":

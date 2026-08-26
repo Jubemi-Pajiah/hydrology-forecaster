@@ -1,74 +1,22 @@
 """
-forecast.py — Multi-step-ahead streamflow forecasting and evaluation.
+forecast.py — Residual diagnostics for a fitted ARIMA model.
 
-For each lead time k (1, 2, 3 days) the fitted ARIMA model produces a
-rolling-origin forecast over the validation period: at every day t it forecasts
-discharge at t+k using only discharge observed up to t. Forecasts are produced
-on the log scale and back-transformed to m3/s.
+The module once also held the evaluation machinery of the daily point-forecast
+pipeline: rolling-origin k-step forecasts scored against a persistence
+benchmark by Nash-Sutcliffe efficiency and a skill score, with a lognormal
+retransformation correction applied to each point forecast. That pipeline was
+superseded on 2026-08-12, when validation moved from point-forecast comparison
+to property-based comparison of a stochastic ensemble (see run_pipeline.py and
+validation.py), and the code was removed on 2026-08-25 rather than left to
+suggest that a skill score is still the reported result. It is not.
 
-Two reference forecasts are evaluated for context:
-  * persistence : Q(t+k) = Q(t)   (the naive benchmark)
-  * the ARIMA model
-
-The persistence skill score quantifies how much the model improves on
-persistence.
+The ARIMA class itself retains its forecasting methods (``forecast``,
+``rolling_kstep``, ``kstep_logvar`` in model.py) because producing a k-step
+forecast is a genuine capability of the model; what this project deliberately
+does not do is report one as its output.
 """
 
-import numpy as np
-
-from .metrics import evaluate
 from .model import ARIMA, ljung_box, jarque_bera, arch_test
-from .preprocess import inv_log_transform
-
-
-def forecast_evaluation(model: ARIMA, log_full: np.ndarray, flow_full: np.ndarray,
-                        valid_start_idx: int, lead_times=(1, 2, 3)) -> dict:
-    """
-    Evaluate the model and persistence over the validation period.
-
-    Parameters
-    ----------
-    model            : ARIMA already fitted on the training (log) series
-    log_full         : full log-discharge series (train + validation)
-    flow_full        : full discharge series in m3/s (train + validation)
-    valid_start_idx  : index in the full series where validation begins
-    lead_times       : forecast lead times in days
-
-    Returns
-    -------
-    dict keyed by lead time, each with model metrics, persistence metrics and
-    the aligned observed/forecast arrays (m3/s) for plotting.
-    """
-    flow_full = np.asarray(flow_full, dtype=float)
-    # k-step log-scale forecast variance, for the lognormal retransformation
-    # bias correction: E[Q] = exp(mu + sigma_k^2 / 2), not exp(mu) (the median).
-    logvar = model.kstep_logvar(max(lead_times))
-    results = {}
-    for k in lead_times:
-        targets, preds_log = model.rolling_kstep(log_full, k, valid_start_idx)
-        var_k = logvar[k - 1]
-        q_pred = inv_log_transform(preds_log + 0.5 * var_k)   # bias-corrected mean
-        q_median = inv_log_transform(preds_log)               # uncorrected (median)
-        q_obs = flow_full[targets]
-        q_persist = flow_full[targets - k]
-
-        m_model = evaluate(q_obs, q_pred, q_persist=q_persist)
-        m_median = evaluate(q_obs, q_median, q_persist=q_persist)
-        m_persist = evaluate(q_obs, q_persist)
-
-        results[k] = {
-            "targets": targets,
-            "q_obs": q_obs,
-            "q_pred": q_pred,
-            "q_median": q_median,
-            "q_persist": q_persist,
-            "logvar": float(var_k),
-            "bias_factor": float(np.exp(0.5 * var_k)),
-            "model": m_model,
-            "median": m_median,
-            "persistence": m_persist,
-        }
-    return results
 
 
 def residual_diagnostics(model: ARIMA, lags: int = 20) -> dict:

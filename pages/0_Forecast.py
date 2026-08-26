@@ -34,7 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 import json
 
-from src.preprocess import build_monthly_dataset, deseasonalise
+from src.preprocess import build_basin_monthly, deseasonalise, PRIMARY_BASIN
 from src.model import ARIMA
 from src.simulate import generate_synthetic_record
 
@@ -53,9 +53,9 @@ BORDER = "#E2E8F0"
 GRAY = "#64748B"
 
 VARIABLE = "discharge"
+BASIN = PRIMARY_BASIN
 UNIT = "m³/s"
 VAR_LABEL = "River flow"
-BASIN_SHORT = "Conecuh River"
 
 MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -70,8 +70,11 @@ def load_results() -> dict:
 
 
 @st.cache_data
-def load_monthly(variable: str):
-    return build_monthly_dataset(variable)
+def load_monthly(variable: str = VARIABLE, basin: str = BASIN):
+    df = build_basin_monthly(basin, variable)
+    # attrs do not survive Streamlit's cache round-trip, so the offset the
+    # inverse transform needs is carried back explicitly.
+    return df, float(df.attrs.get("log_offset", 0.0))
 
 
 @st.cache_resource
@@ -84,7 +87,7 @@ def fit_model(variable: str = VARIABLE):
     """
     r = load_results()["variables"][variable]
     fr = r["full_record"]
-    df = load_monthly(variable)
+    df, _offset = load_monthly(variable)
     profile = fr["seasonal_profile"]
     z = deseasonalise(df["log_value"].to_numpy(), df.index.month.to_numpy(), profile)
     model = ARIMA.from_params(tuple(fr["order"]), fr["constant"],
@@ -194,14 +197,21 @@ st.markdown(
 
 results = load_results()
 R = results["variables"][VARIABLE]
-df_hist = load_monthly(VARIABLE)
+META = results["case_study_basin"]
+CONTRAST_META = results["contrast_basin"]
+COMPARE = results["method_comparison"]
+BASIN_SHORT = META["short_name"]
+df_hist, LOG_OFFSET = load_monthly(VARIABLE)
 hist_values = df_hist["value"].to_numpy()
 n_hist_years = len(df_hist) // 12
+n_valid_years = max(1, round(
+    (pd.Timestamp(R["valid_period"][1]) - pd.Timestamp(R["valid_period"][0])).days / 365.25))
 
 st.title("River Outlook")
-st.caption(f"Synthetic monthly discharge records for the {BASIN_SHORT} at Brantley, "
-           f"Alabama (USGS 02371500) — generated from an ARIMA model fitted to "
-           f"{df_hist.index[0]:%Y}–{df_hist.index[-1]:%Y}.")
+st.caption(
+    f"Synthetic monthly discharge records for the {META['name']} "
+    f"(GRDC {META['grdc_id']}, {META['area_km2']:,.0f} km²) — generated from an "
+    f"ARIMA model fitted to {df_hist.index[0]:%Y}–{df_hist.index[-1]:%Y}.")
 
 left, center, right = st.columns([1, 2.35, 1.15], gap="medium")
 
@@ -285,7 +295,8 @@ with center:
         with st.spinner(f"Generating {n_years:,} years…"):
             record, months = generate_synthetic_record(
                 model, int(n_years), profile, n_reps=int(n_reps),
-                method=fr.get("innovations", "bootstrap"), seed=None, start_month=1)
+                method=fr.get("innovations", "bootstrap"), seed=None,
+                start_month=1, offset=LOG_OFFSET)
         st.session_state["record"] = record
         st.session_state["months"] = months
         st.session_state["gen_years"] = int(n_years)
@@ -429,7 +440,7 @@ with center:
             ({gen_reps} independent records, {annual_max.size:,} synthetic years in
             total). It averages <strong>{record.mean():.1f} {UNIT}</strong> against
             <strong>{hist_values.mean():.1f} {UNIT}</strong> in the measured record,
-            and gives {rp100_txt}. Tested against {n_hist_years - 24} years of data
+            and gives {rp100_txt}. Tested against {n_valid_years} years of data
             held back from fitting, this model reproduced <strong>{n_ok} of {n_tot}</strong>
             statistical properties of the real record.
             </div>
@@ -467,34 +478,88 @@ with center:
                 "Month": MONTH_ABBR,
                 "Mean (log scale)": np.round(profile["means"], 3),
                 "Std. dev. (log scale)": np.round(profile["sds"], 3),
-                f"Typical flow ({UNIT})": np.round(np.exp(profile["means"]), 1),
+                f"Typical flow ({UNIT})": np.round(
+                    np.maximum(np.exp(profile["means"]) - LOG_OFFSET, 0.0), 1),
             }), use_container_width=True, hide_index=True)
 
-            alt_info = R.get("seasonal_difference_alternative", {})
-            if alt_info.get("applicable"):
-                st.markdown("**Why the cycle is not removed by differencing at lag 12.**")
+            hc = COMPARE.get(BASIN, {})
+            cc = COMPARE.get("conecuh", {})
+            if hc.get("seasonal_differencing"):
+                sd, sdd = hc["standardisation"], hc["seasonal_differencing"]
+                st.markdown("**Why the cycle is removed by standardisation and not "
+                            "by differencing at lag 12.**")
                 st.caption(
-                    f"Differencing at lag 12 was tested and fits the measured record "
-                    f"well (Ljung–Box p = {alt_info['ljung_box_pvalue']:.3f}). It "
-                    "cannot be used to generate a long record, because it leaves an "
-                    "integrated process whose spread grows without limit. Asked for "
-                    f"{alt_info['record_years']:,} years it returns a series averaging "
-                    f"{alt_info['record_mean']:.2g} {UNIT} — against a measured "
-                    f"average of {hist_values.mean():.1f} — drifting by a factor of "
-                    f"{alt_info['drift_ratio']:.2g} from its first decade to its last. "
-                    "Removing the cycle by seasonal standardisation instead keeps the "
-                    "process stationary. This is discussed in Section 4.2 of the report.")
+                    "Both are standard. Differencing at lag 12 was fitted to the same "
+                    "record and describes it slightly better "
+                    f"(Ljung-Box p = {sdd['ljung_box_pvalue']:.3f} against "
+                    f"{sd['ljung_box_pvalue']:.3f}), which is why textbooks treat the "
+                    "two as interchangeable. They are not interchangeable for "
+                    "generating. Differencing leaves an integrated process whose "
+                    f"spread grows without limit: asked for {hc['record_years_generated']:,} "
+                    "years it returns a record averaging "
+                    f"{sdd['record_mean_scientific']} {UNIT} against a measured "
+                    f"{hc['observed_mean']:.1f}, drifting by a factor of "
+                    f"{sdd['drift_ratio_scientific']} from its first decade to its "
+                    "last. Standardisation stays put - record mean "
+                    f"{sd['record_mean']:.1f} {UNIT}, drift "
+                    f"{sd['drift_ratio']:.3f}.")
+                if cc.get("seasonal_differencing"):
+                    st.caption(
+                        "The same comparison was run unchanged on a river in a "
+                        "completely different climate, the "
+                        f"{CONTRAST_META['short_name']} in Alabama. Differencing "
+                        "fails there too, in the opposite direction: the generated "
+                        "record decays to "
+                        f"{cc['seasonal_differencing']['drift_ratio_scientific']} of "
+                        "its starting level, giving a mean of "
+                        f"{cc['seasonal_differencing']['record_mean']:.1f} against a "
+                        f"measured {cc['observed_mean']:.1f}. Failing on two rivers "
+                        "with almost nothing in common is what makes this a property "
+                        "of the method rather than of one river. Report Section 4.2.")
+                st.dataframe(pd.DataFrame([
+                    {"": "Seasonal spread left behind (max/min monthly SD)",
+                     "Standardisation": f"{sd['monthly_sd_spread']['ratio']:.2f}",
+                     "Differencing at lag 12": f"{sdd['monthly_sd_spread']['ratio']:.2f}"},
+                    {"": "Ljung-Box p",
+                     "Standardisation": f"{sd['ljung_box_pvalue']:.3f}",
+                     "Differencing at lag 12": f"{sdd['ljung_box_pvalue']:.3f}"},
+                    {"": f"Mean of a {hc['record_years_generated']:,}-yr record ({UNIT})",
+                     "Standardisation": f"{sd['record_mean']:.1f}",
+                     "Differencing at lag 12": sdd["record_mean_scientific"]},
+                    {"": "Drift, last decade / first",
+                     "Standardisation": f"{sd['drift_ratio']:.3f}",
+                     "Differencing at lag 12": sdd["drift_ratio_scientific"]},
+                    {"": "Usable as a generator",
+                     "Standardisation": "yes", "Differencing at lag 12": "no"},
+                ]), use_container_width=True, hide_index=True)
+                st.caption(
+                    "The two columns are deliberately not ranked by AIC: they are "
+                    "fitted to different transformations of the series, so their "
+                    "likelihoods are not comparable.")
 
-            rep = R["stationarity_report"][-1]
+            d_ind = R["full_record"].get("d_indicated_by_tests", 0)
+            rep0 = R["stationarity_report"][0]
+            st.markdown("**Stationarity of the deseasonalised series.**")
             st.caption(
-                f"Stationarity of the deseasonalised series — ADF statistic "
-                f"{rep['adf_stat']:.3f} "
-                f"({'rejects' if rep['adf_stationary'] else 'does not reject'} a unit "
-                f"root); KPSS statistic {rep['kpss_stat']:.3f} "
-                f"({'does not reject' if rep['kpss_stationary'] else 'rejects'} "
-                f"stationarity). Both point to d = 0, so no differencing is applied.")
+                f"At d = 0 the ADF statistic is {rep0['adf_stat']:.3f} "
+                f"({'rejecting' if rep0['adf_stationary'] else 'not rejecting'} a unit "
+                f"root) and the KPSS statistic {rep0['kpss_stat']:.3f} "
+                f"({'not rejecting' if rep0['kpss_stationary'] else 'rejecting'} "
+                "stationarity). "
+                + (f"The tests indicate d = {d_ind}. The generating model is "
+                   "nonetheless fitted with d = 0, deliberately: any differencing "
+                   "leaves an integrated process whose spread grows without limit, "
+                   "which is the same reason differencing at lag 12 is not used. What "
+                   "the tests are picking up is the multi-decade drought and recovery "
+                   "in the record, not a defect of the deseasonalisation. Report "
+                   "Section 4.3."
+                   if d_ind else
+                   "The tests indicate d = 0, so no differencing is applied."))
 
-            st.markdown("**Property-based validation** (2004–2014, held out of fitting)")
+            st.markdown(
+                f"**Property-based validation** "
+                f"({R['valid_period'][0][:4]}–{R['valid_period'][1][:4]}, held out "
+                "of fitting)")
             st.dataframe(pd.DataFrame([{
                 "Property": k.replace("_", " "),
                 "Historical": round(v["historical"], 3),
@@ -502,13 +567,20 @@ with center:
                 "Reproduced?": "yes" if v["within_90pct_envelope"] else "no",
             } for k, v in R["validation"].items()]),
                 use_container_width=True, hide_index=True)
+            _miss = [k.replace("_", " ") for k, v in R["validation"].items()
+                     if not v["within_90pct_envelope"]]
             st.caption(
-                "The property not reproduced is the seasonal amplitude: the annual "
-                "cycle at this gauge weakened over the record (amplitude 35.2 m³/s in "
-                "1980–89 and 43.5 in 1990–99, against 25.8 in 2004–14), so a model "
-                "whose seasonal parameters come from the earlier period cannot match "
-                "the later one. That is a finding about the river, not a fault in the "
-                "fit — see Section 4.6 of the report.")
+                ("Not reproduced: " + ", ".join(_miss) + ". " if _miss else "")
+                + "The estimation period spans the Sahel drought and averages "
+                f"{R['historical_stats']['mean']:.1f} {UNIT}; the held-out period "
+                "lies in the rainfall recovery that followed and averages "
+                f"{R['validation']['mean']['historical']:.1f}. A stationary model "
+                "fitted to the first cannot reproduce the level of the second, and it "
+                "is not meant to. What it does reproduce over the same period is the "
+                "variability, the skewness, the seasonal amplitude, the low-flow "
+                "duration and the peak — the shape of the river is right and the "
+                "level is not. This is a finding about the climate record rather than "
+                "a fault in the fit; see Section 4.7 of the report.")
 
 # ── Right rail: the extremes ──────────────────────────────────────────────────
 with right:

@@ -1,12 +1,467 @@
 {
-  "basin": "Conecuh River at Brantley, Alabama, USA (USGS 02371500)",
-  "gauge_id": "02371500",
+  "case_study_basin": {
+    "name": "Hadejia River at Hadejia, Jigawa State, Nigeria",
+    "short_name": "Hadejia River at Hadejia",
+    "country": "Nigeria",
+    "river": "Hadejia",
+    "station": "Hadejia",
+    "basin": "Hadejia-Jama'are-Komadugu Yobe (Lake Chad basin)",
+    "gsim_id": "NG_0000012",
+    "grdc_id": "1837401",
+    "latitude_deg": 12.4406,
+    "longitude_deg": 10.0309,
+    "altitude_m": 357.0,
+    "area_km2": 30435.0,
+    "climate": "Sahelian / semi-arid, single wet season (June-October)",
+    "unit": "m3/s",
+    "role": "primary"
+  },
+  "contrast_basin": {
+    "name": "Conecuh River at Brantley, Alabama, USA",
+    "short_name": "Conecuh River at Brantley",
+    "country": "United States",
+    "river": "Conecuh",
+    "station": "Brantley",
+    "basin": "Conecuh-Escambia",
+    "usgs_id": "02371500",
+    "latitude_deg": 31.8,
+    "longitude_deg": -86.25,
+    "altitude_m": null,
+    "area_km2": 1294.4,
+    "climate": "Humid subtropical, rainfall in every month",
+    "unit": "m3/s",
+    "role": "contrast"
+  },
+  "basin": "Hadejia River at Hadejia, Jigawa State, Nigeria (GRDC 1837401)",
+  "gauge_id": "1837401",
   "timestep": "monthly",
+  "min_ar_root_constraint": 1.05,
+  "record_years": 1000,
+  "record_reps": 50,
+  "innovations": "bootstrap",
   "variables": {
     "discharge": {
+      "basin": "hadejia",
+      "basin_name": "Hadejia River at Hadejia, Jigawa State, Nigeria",
+      "unit": "m3/s",
+      "n_months": 314,
+      "n_interpolated_months": 8,
+      "log_offset": 0.242748,
+      "record_period": [
+        "1980-01-01",
+        "2006-02-01"
+      ],
+      "train_period": [
+        "1980-01-01",
+        "1999-12-01"
+      ],
+      "valid_period": [
+        "2000-01-01",
+        "2006-02-01"
+      ],
+      "differencing_d": 0,
+      "seasonal_period": 12,
+      "seasonal_profile": {
+        "means": [
+          1.824111,
+          1.772577,
+          1.526764,
+          1.799159,
+          2.107066,
+          2.655459,
+          3.261236,
+          3.773936,
+          4.019447,
+          3.084795,
+          2.120364,
+          1.928394
+        ],
+        "sds": [
+          0.678488,
+          0.646079,
+          1.036575,
+          0.841186,
+          0.791196,
+          0.597273,
+          0.366872,
+          0.280369,
+          0.451027,
+          0.858653,
+          0.909171,
+          0.913658
+        ],
+        "period": 12
+      },
+      "stationarity_report": [
+        {
+          "d": 0,
+          "adf_stat": -0.9795,
+          "adf_stationary": false,
+          "kpss_stat": 1.4479,
+          "kpss_stationary": false
+        },
+        {
+          "d": 1,
+          "adf_stat": -6.023,
+          "adf_stationary": true,
+          "kpss_stat": 0.0274,
+          "kpss_stationary": true
+        }
+      ],
+      "order": [
+        1,
+        0,
+        0
+      ],
+      "seasonal_order": [
+        0,
+        0,
+        0
+      ],
+      "label": "ARIMA(1, 0, 0)",
+      "aic": -158.62,
+      "bic": -148.22,
+      "phi": [
+        0.701296
+      ],
+      "theta": [],
+      "constant": 0.004717,
+      "min_ar_root_constraint": 1.05,
+      "standard_errors": {
+        "c": 0.045401,
+        "phi": [
+          0.046887
+        ],
+        "theta": []
+      },
+      "aic_ranking": [
+        {
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "label": "ARIMA(1, 0, 0)",
+          "aic": -158.62,
+          "bic": -148.22,
+          "min_ar_root": 1.426,
+          "admissible": true
+        },
+        {
+          "order": [
+            3,
+            0,
+            2
+          ],
+          "label": "ARIMA(3, 0, 2)",
+          "aic": -158.5,
+          "bic": -134.25,
+          "min_ar_root": 1.049,
+          "admissible": false
+        },
+        {
+          "order": [
+            1,
+            0,
+            1
+          ],
+          "label": "ARIMA(1, 0, 1)",
+          "aic": -156.71,
+          "bic": -142.86,
+          "min_ar_root": 1.394,
+          "admissible": true
+        },
+        {
+          "order": [
+            2,
+            0,
+            0
+          ],
+          "label": "ARIMA(2, 0, 0)",
+          "aic": -156.71,
+          "bic": -142.85,
+          "min_ar_root": 1.399,
+          "admissible": true
+        },
+        {
+          "order": [
+            3,
+            0,
+            0
+          ],
+          "label": "ARIMA(3, 0, 0)",
+          "aic": -154.81,
+          "bic": -137.49,
+          "min_ar_root": 1.363,
+          "admissible": true
+        },
+        {
+          "order": [
+            1,
+            0,
+            2
+          ],
+          "label": "ARIMA(1, 0, 2)",
+          "aic": -154.78,
+          "bic": -137.46,
+          "min_ar_root": 1.37,
+          "admissible": true
+        },
+        {
+          "order": [
+            2,
+            0,
+            1
+          ],
+          "label": "ARIMA(2, 0, 1)",
+          "aic": -154.72,
+          "bic": -137.4,
+          "min_ar_root": 1.397,
+          "admissible": true
+        },
+        {
+          "order": [
+            4,
+            0,
+            2
+          ],
+          "label": "ARIMA(4, 0, 2)",
+          "aic": -153.96,
+          "bic": -126.25,
+          "min_ar_root": 1.094,
+          "admissible": true
+        }
+      ],
+      "diagnostics": {
+        "ljung_box": {
+          "stat": 26.13,
+          "pvalue": 0.1266
+        },
+        "arch": {
+          "stat": 25.857,
+          "pvalue": 0.1706
+        },
+        "jarque_bera": {
+          "stat": 9.6159,
+          "pvalue": 0.0082,
+          "skew": -0.1689,
+          "kurtosis": 3.9228
+        },
+        "roots": {
+          "ar": [
+            1.426
+          ],
+          "ma": []
+        },
+        "smearing_factor": 1.2848
+      },
+      "historical_stats": {
+        "mean": 19.8357,
+        "std": 20.3694,
+        "skew": 1.6265,
+        "lag1_acf": 0.6861,
+        "peak": 95.718,
+        "max_dry_spell_months": 7,
+        "seasonal_amplitude": 53.7528,
+        "seasonal_means": {
+          "1": 7.488,
+          "2": 6.9412,
+          "3": 6.6344,
+          "4": 7.7326,
+          "5": 9.9019,
+          "6": 16.1567,
+          "7": 27.5387,
+          "8": 44.9485,
+          "9": 60.3872,
+          "10": 29.3578,
+          "11": 11.754,
+          "12": 9.1873
+        }
+      },
+      "validation": {
+        "mean": {
+          "historical": 38.6718,
+          "ensemble_median": 19.8892,
+          "ensemble_p5": 15.2571,
+          "ensemble_p95": 26.8074,
+          "within_90pct_envelope": false
+        },
+        "std": {
+          "historical": 25.9517,
+          "ensemble_median": 21.1339,
+          "ensemble_p5": 15.515,
+          "ensemble_p95": 32.8707,
+          "within_90pct_envelope": true
+        },
+        "skew": {
+          "historical": 2.0134,
+          "ensemble_median": 1.7581,
+          "ensemble_p5": 1.1933,
+          "ensemble_p95": 3.4567,
+          "within_90pct_envelope": true
+        },
+        "lag1_acf": {
+          "historical": 0.7335,
+          "ensemble_median": 0.6402,
+          "ensemble_p5": 0.4872,
+          "ensemble_p95": 0.7214,
+          "within_90pct_envelope": false
+        },
+        "max_dry_spell_months": {
+          "historical": 4,
+          "ensemble_median": 5.0,
+          "ensemble_p5": 3.0,
+          "ensemble_p95": 7.0,
+          "within_90pct_envelope": true
+        },
+        "peak": {
+          "historical": 139.4372,
+          "ensemble_median": 98.8025,
+          "ensemble_p5": 65.3134,
+          "ensemble_p95": 204.9404,
+          "within_90pct_envelope": true
+        },
+        "seasonal_amplitude": {
+          "historical": 59.4522,
+          "ensemble_median": 55.7185,
+          "ensemble_p5": 39.6724,
+          "ensemble_p95": 76.9536,
+          "within_90pct_envelope": true
+        }
+      },
+      "validation_n_within": 5,
+      "validation_n_total": 7,
+      "full_record": {
+        "order": [
+          1,
+          0,
+          0
+        ],
+        "label": "ARIMA(1, 0, 0)",
+        "seasonal_profile": {
+          "means": [
+            2.201116,
+            2.124151,
+            1.867195,
+            2.062679,
+            2.343171,
+            2.779559,
+            3.337562,
+            3.819108,
+            4.082976,
+            3.324301,
+            2.486457,
+            2.327499
+          ],
+          "sds": [
+            0.87914,
+            0.836408,
+            1.124168,
+            0.895792,
+            0.819111,
+            0.59556,
+            0.367763,
+            0.263466,
+            0.451334,
+            0.905923,
+            1.079705,
+            1.108237
+          ],
+          "period": 12
+        },
+        "constant": 0.002412,
+        "phi": [
+          0.762499
+        ],
+        "theta": [],
+        "innovations": "bootstrap",
+        "log_offset": 0.242748,
+        "d_indicated_by_tests": 1,
+        "d_used": 0,
+        "historical_properties": {
+          "mean": 24.2748,
+          "std": 23.195,
+          "skew": 1.7521,
+          "lag1_acf": 0.7398,
+          "peak": 139.4372,
+          "max_dry_spell_months": 7,
+          "seasonal_amplitude": 54.5938,
+          "seasonal_means": {
+            "1": 12.5534,
+            "2": 11.2899,
+            "3": 10.0893,
+            "4": 10.4599,
+            "5": 12.8614,
+            "6": 18.3295,
+            "7": 29.7198,
+            "8": 46.812,
+            "9": 64.6831,
+            "10": 38.6817,
+            "11": 19.9922,
+            "12": 16.7754
+          }
+        },
+        "long_trace_properties": {
+          "mean": 25.0152,
+          "std": 28.3924,
+          "skew": 4.8108,
+          "lag1_acf": 0.607,
+          "peak": 600.5314,
+          "max_dry_spell_months": 9,
+          "seasonal_amplitude": 53.795,
+          "seasonal_means": {
+            "1": 12.5152,
+            "2": 11.2797,
+            "3": 11.6027,
+            "4": 11.9709,
+            "5": 14.5416,
+            "6": 18.9952,
+            "7": 29.805,
+            "8": 46.8854,
+            "9": 65.0747,
+            "10": 39.858,
+            "11": 19.8087,
+            "12": 17.8452
+          }
+        }
+      },
+      "synthetic_record": {
+        "n_months": 12000,
+        "n_realisations": 50,
+        "n_annual_maxima": 50000,
+        "mean": 25.5104,
+        "std": 33.6097,
+        "min": 0.0,
+        "max": 4900.8735,
+        "p95": 73.5596,
+        "p99": 125.5636,
+        "annual_max_mean": 76.0735,
+        "annual_min_mean": 4.3839,
+        "return_period_discharge": {
+          "2": 62.5228,
+          "5": 92.0613,
+          "10": 116.1081,
+          "25": 162.5315,
+          "50": 220.5276,
+          "100": 312.2765,
+          "500": 656.0655
+        },
+        "drift_ratio": 0.9659
+      }
+    }
+  },
+  "contrast_variables": {
+    "discharge": {
+      "basin": "conecuh",
+      "basin_name": "Conecuh River at Brantley, Alabama, USA",
       "unit": "m3/s",
       "n_months": 420,
       "n_interpolated_months": 0,
+      "log_offset": 0.0,
+      "record_period": [
+        "1980-01-01",
+        "2014-12-01"
+      ],
       "train_period": [
         "1980-01-01",
         "2003-12-01"
@@ -48,58 +503,6 @@
         ],
         "period": 12
       },
-      "seasonal_difference_alternative": {
-        "applicable": true,
-        "D": 1,
-        "period": 12,
-        "label": "ARIMA(2, 0, 1)(0, 1, 1)[12]",
-        "order": [
-          2,
-          0,
-          1
-        ],
-        "seasonal_order": [
-          0,
-          1,
-          1
-        ],
-        "aic": -162.97,
-        "ljung_box_pvalue": 0.519,
-        "Theta": [
-          -0.8765
-        ],
-        "seasonal_report": {
-          "D": 1,
-          "period": 12,
-          "report": [
-            {
-              "period": 12,
-              "acf_at_period": 0.4279854867676668,
-              "white_noise_bound": 0.11549198536247317,
-              "acf_significant": true,
-              "strength": 0.4968594217431442,
-              "n": 288,
-              "D": 0
-            },
-            {
-              "period": 12,
-              "acf_at_period": -0.5498337240645841,
-              "white_noise_bound": 0.11797596814811888,
-              "acf_significant": false,
-              "strength": 0.0015601887694997746,
-              "n": 276,
-              "D": 1
-            }
-          ],
-          "strength_threshold": 0.05
-        },
-        "record_years": 1000,
-        "record_mean": 323157842658.3719,
-        "record_max": 2050257207062362.5,
-        "first_decade_mean": 34.8537,
-        "last_decade_mean": 13473111706835.338,
-        "drift_ratio": 386562261931.5853
-      },
       "stationarity_report": [
         {
           "d": 0,
@@ -129,6 +532,7 @@
         -0.205782
       ],
       "constant": 0.001287,
+      "min_ar_root_constraint": 1.05,
       "standard_errors": {
         "c": 0.037804,
         "phi": [
@@ -145,8 +549,11 @@
             0,
             1
           ],
+          "label": "ARIMA(1, 0, 1)",
           "aic": -119.64,
-          "bic": -105.05
+          "bic": -105.05,
+          "min_ar_root": 1.426,
+          "admissible": true
         },
         {
           "order": [
@@ -154,8 +561,11 @@
             0,
             0
           ],
+          "label": "ARIMA(2, 0, 0)",
           "aic": -119.55,
-          "bic": -104.95
+          "bic": -104.95,
+          "min_ar_root": 1.493,
+          "admissible": true
         },
         {
           "order": [
@@ -163,8 +573,11 @@
             0,
             0
           ],
+          "label": "ARIMA(3, 0, 0)",
           "aic": -117.69,
-          "bic": -99.44
+          "bic": -99.44,
+          "min_ar_root": 1.439,
+          "admissible": true
         },
         {
           "order": [
@@ -172,8 +585,11 @@
             0,
             2
           ],
+          "label": "ARIMA(1, 0, 2)",
           "aic": -117.54,
-          "bic": -99.29
+          "bic": -99.29,
+          "min_ar_root": 1.534,
+          "admissible": true
         },
         {
           "order": [
@@ -181,8 +597,47 @@
             0,
             1
           ],
+          "label": "ARIMA(2, 0, 1)",
           "aic": -117.51,
-          "bic": -99.27
+          "bic": -99.27,
+          "min_ar_root": 1.5,
+          "admissible": true
+        },
+        {
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "label": "ARIMA(1, 0, 0)",
+          "aic": -117.11,
+          "bic": -106.16,
+          "min_ar_root": 1.779,
+          "admissible": true
+        },
+        {
+          "order": [
+            4,
+            0,
+            0
+          ],
+          "label": "ARIMA(4, 0, 0)",
+          "aic": -115.95,
+          "bic": -94.05,
+          "min_ar_root": 1.53,
+          "admissible": true
+        },
+        {
+          "order": [
+            2,
+            0,
+            2
+          ],
+          "label": "ARIMA(2, 0, 2)",
+          "aic": -115.61,
+          "bic": -93.71,
+          "min_ar_root": 1.453,
+          "admissible": true
         }
       ],
       "diagnostics": {
@@ -332,6 +787,7 @@
           -0.229149
         ],
         "innovations": "bootstrap",
+        "log_offset": 0.0,
         "d_indicated_by_tests": 0,
         "d_used": 0,
         "historical_properties": {
@@ -406,9 +862,16 @@
       }
     },
     "rainfall": {
+      "basin": "conecuh",
+      "basin_name": "Conecuh River at Brantley, Alabama, USA",
       "unit": "mm/month",
       "n_months": 420,
       "n_interpolated_months": 0,
+      "log_offset": 0.0,
+      "record_period": [
+        "1980-01-01",
+        "2014-12-01"
+      ],
       "train_period": [
         "1980-01-01",
         "2003-12-01"
@@ -450,26 +913,6 @@
         ],
         "period": 12
       },
-      "seasonal_difference_alternative": {
-        "applicable": false,
-        "D": 0,
-        "seasonal_report": {
-          "D": 0,
-          "period": 12,
-          "report": [
-            {
-              "period": 12,
-              "acf_at_period": 0.07976113431600533,
-              "white_noise_bound": 0.11549198536247317,
-              "acf_significant": false,
-              "strength": 0.1470017136691588,
-              "n": 288,
-              "D": 0
-            }
-          ],
-          "strength_threshold": 0.05
-        }
-      },
       "stationarity_report": [
         {
           "d": 0,
@@ -502,6 +945,7 @@
         0.846719
       ],
       "constant": -3.3e-05,
+      "min_ar_root_constraint": 1.05,
       "standard_errors": {
         "c": 0.058892,
         "phi": [
@@ -521,8 +965,11 @@
             0,
             2
           ],
+          "label": "ARIMA(3, 0, 2)",
           "aic": -16.17,
-          "bic": 9.37
+          "bic": 9.37,
+          "min_ar_root": 1.171,
+          "admissible": true
         },
         {
           "order": [
@@ -530,8 +977,11 @@
             0,
             0
           ],
+          "label": "ARIMA(1, 0, 0)",
           "aic": -10.79,
-          "bic": 0.16
+          "bic": 0.16,
+          "min_ar_root": 21.645,
+          "admissible": true
         },
         {
           "order": [
@@ -539,8 +989,11 @@
             0,
             1
           ],
+          "label": "ARIMA(0, 0, 1)",
           "aic": -10.75,
-          "bic": 0.2
+          "bic": 0.2,
+          "min_ar_root": null,
+          "admissible": true
         },
         {
           "order": [
@@ -548,8 +1001,11 @@
             0,
             2
           ],
+          "label": "ARIMA(4, 0, 2)",
           "aic": -9.52,
-          "bic": 19.68
+          "bic": 19.68,
+          "min_ar_root": 1.099,
+          "admissible": true
         },
         {
           "order": [
@@ -557,8 +1013,47 @@
             0,
             1
           ],
+          "label": "ARIMA(1, 0, 1)",
           "aic": -9.28,
-          "bic": 5.32
+          "bic": 5.32,
+          "min_ar_root": 1.721,
+          "admissible": true
+        },
+        {
+          "order": [
+            2,
+            0,
+            0
+          ],
+          "label": "ARIMA(2, 0, 0)",
+          "aic": -9.04,
+          "bic": 5.55,
+          "min_ar_root": 5.5,
+          "admissible": true
+        },
+        {
+          "order": [
+            0,
+            0,
+            2
+          ],
+          "label": "ARIMA(0, 0, 2)",
+          "aic": -8.97,
+          "bic": 5.63,
+          "min_ar_root": null,
+          "admissible": true
+        },
+        {
+          "order": [
+            3,
+            0,
+            0
+          ],
+          "label": "ARIMA(3, 0, 0)",
+          "aic": -7.99,
+          "bic": 10.25,
+          "min_ar_root": 2.365,
+          "admissible": true
         }
       ],
       "diagnostics": {
@@ -714,6 +1209,7 @@
           0.836992
         ],
         "innovations": "bootstrap",
+        "log_offset": 0.0,
         "d_indicated_by_tests": 0,
         "d_used": 0,
         "historical_properties": {
@@ -788,9 +1284,16 @@
       }
     },
     "stage": {
+      "basin": "conecuh",
+      "basin_name": "Conecuh River at Brantley, Alabama, USA",
       "unit": "m",
       "n_months": 420,
       "n_interpolated_months": 3,
+      "log_offset": 0.0,
+      "record_period": [
+        "1980-01-01",
+        "2014-12-01"
+      ],
       "train_period": [
         "1980-01-01",
         "2003-12-01"
@@ -832,58 +1335,6 @@
         ],
         "period": 12
       },
-      "seasonal_difference_alternative": {
-        "applicable": true,
-        "D": 1,
-        "period": 12,
-        "label": "ARIMA(2, 0, 1)(0, 1, 1)[12]",
-        "order": [
-          2,
-          0,
-          1
-        ],
-        "seasonal_order": [
-          0,
-          1,
-          1
-        ],
-        "aic": -472.09,
-        "ljung_box_pvalue": 0.4488,
-        "Theta": [
-          -0.8715
-        ],
-        "seasonal_report": {
-          "D": 1,
-          "period": 12,
-          "report": [
-            {
-              "period": 12,
-              "acf_at_period": 0.4447521455888241,
-              "white_noise_bound": 0.11549198536247317,
-              "acf_significant": true,
-              "strength": 0.5252055432376727,
-              "n": 288,
-              "D": 0
-            },
-            {
-              "period": 12,
-              "acf_at_period": -0.549935445880915,
-              "white_noise_bound": 0.11797596814811888,
-              "acf_significant": false,
-              "strength": 0.001909561061150391,
-              "n": 276,
-              "D": 1
-            }
-          ],
-          "strength_threshold": 0.05
-        },
-        "record_years": 1000,
-        "record_mean": 1271.0799,
-        "record_max": 1572421.2599,
-        "first_decade_mean": 1.3704,
-        "last_decade_mean": 19063.3924,
-        "drift_ratio": 13911.0462
-      },
       "stationarity_report": [
         {
           "d": 0,
@@ -913,6 +1364,7 @@
         -0.138005
       ],
       "constant": 0.000381,
+      "min_ar_root_constraint": 1.05,
       "standard_errors": {
         "c": 0.039911,
         "phi": [
@@ -929,8 +1381,11 @@
             0,
             1
           ],
+          "label": "ARIMA(1, 0, 1)",
           "aic": -136.24,
-          "bic": -121.65
+          "bic": -121.65,
+          "min_ar_root": 1.459,
+          "admissible": true
         },
         {
           "order": [
@@ -938,8 +1393,11 @@
             0,
             0
           ],
+          "label": "ARIMA(2, 0, 0)",
           "aic": -136.1,
-          "bic": -121.51
+          "bic": -121.51,
+          "min_ar_root": 1.496,
+          "admissible": true
         },
         {
           "order": [
@@ -947,8 +1405,11 @@
             0,
             0
           ],
+          "label": "ARIMA(1, 0, 0)",
           "aic": -136.06,
-          "bic": -125.11
+          "bic": -125.11,
+          "min_ar_root": 1.674,
+          "admissible": true
         },
         {
           "order": [
@@ -956,8 +1417,11 @@
             0,
             0
           ],
+          "label": "ARIMA(3, 0, 0)",
           "aic": -134.26,
-          "bic": -116.02
+          "bic": -116.02,
+          "min_ar_root": 1.436,
+          "admissible": true
         },
         {
           "order": [
@@ -965,8 +1429,47 @@
             0,
             2
           ],
+          "label": "ARIMA(1, 0, 2)",
           "aic": -134.05,
-          "bic": -115.8
+          "bic": -115.8,
+          "min_ar_root": 1.518,
+          "admissible": true
+        },
+        {
+          "order": [
+            2,
+            0,
+            1
+          ],
+          "label": "ARIMA(2, 0, 1)",
+          "aic": -133.68,
+          "bic": -115.44,
+          "min_ar_root": 1.549,
+          "admissible": true
+        },
+        {
+          "order": [
+            2,
+            0,
+            2
+          ],
+          "label": "ARIMA(2, 0, 2)",
+          "aic": -132.88,
+          "bic": -110.98,
+          "min_ar_root": 1.434,
+          "admissible": true
+        },
+        {
+          "order": [
+            4,
+            0,
+            0
+          ],
+          "label": "ARIMA(4, 0, 0)",
+          "aic": -132.54,
+          "bic": -110.64,
+          "min_ar_root": 1.536,
+          "admissible": true
         }
       ],
       "diagnostics": {
@@ -1117,6 +1620,7 @@
           -0.133313
         ],
         "innovations": "bootstrap",
+        "log_offset": 0.0,
         "d_indicated_by_tests": 1,
         "d_used": 0,
         "historical_properties": {
@@ -1190,5 +1694,733 @@
         "drift_ratio": 0.9744
       }
     }
-  }
+  },
+  "method_comparison": {
+    "hadejia": {
+      "basin": "hadejia",
+      "variable": "discharge",
+      "observed_mean": 24.2748,
+      "record_years_generated": 1000,
+      "untreated": {
+        "seasonal_strength": 0.4293,
+        "acf_at_lag12": 0.7549,
+        "monthly_sd_spread": {
+          "by_month": [
+            0.8791,
+            0.8364,
+            1.1242,
+            0.8958,
+            0.8191,
+            0.5956,
+            0.3678,
+            0.2635,
+            0.4513,
+            0.9059,
+            1.0797,
+            1.1082
+          ],
+          "min": 0.26346569154917293,
+          "max": 1.1241675655398027,
+          "ratio": 4.2668461268323785
+        }
+      },
+      "standardisation": {
+        "label": "ARIMA(1, 0, 0)",
+        "order": [
+          1,
+          0,
+          0
+        ],
+        "aic": -271.76,
+        "seasonal_strength_after": 0.0,
+        "acf_at_lag12_after": 0.4576,
+        "monthly_sd_spread": {
+          "by_month": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "min": 0.9999999999999998,
+          "max": 1.0,
+          "ratio": 1.0000000000000002
+        },
+        "ljung_box_pvalue": 0.0592,
+        "arch_pvalue": 0.0071,
+        "min_ar_root": 1.3115,
+        "n_seasonal_parameters": 24,
+        "observations_consumed_by_transform": 0,
+        "record_mean": 25.4975,
+        "record_max": 4900.87,
+        "record_mean_over_observed": 1.0504,
+        "first_decade_mean": 25.3614,
+        "last_decade_mean": 25.5349,
+        "drift_ratio": 1.0068,
+        "decade_mean_trajectory": [
+          25.3614,
+          26.7981,
+          26.43,
+          26.3303,
+          25.7289,
+          26.9146,
+          24.8403,
+          25.3905,
+          25.3361,
+          24.558,
+          24.9553,
+          25.4898,
+          24.0963,
+          25.3138,
+          27.2964,
+          25.099,
+          23.8046,
+          25.7316,
+          24.928,
+          24.514,
+          24.3108,
+          26.2708,
+          26.3486,
+          27.4586,
+          24.1219,
+          24.0061,
+          24.2021,
+          26.5439,
+          24.5995,
+          25.3874,
+          26.2188,
+          27.0783,
+          23.6224,
+          25.4607,
+          25.9984,
+          27.8578,
+          25.641,
+          26.455,
+          27.6501,
+          25.0946,
+          25.027,
+          26.6368,
+          25.5177,
+          24.3249,
+          25.2841,
+          25.8171,
+          25.5494,
+          24.2434,
+          26.5156,
+          25.4426,
+          25.1563,
+          25.4869,
+          25.3814,
+          25.0661,
+          26.8186,
+          25.9938,
+          24.6751,
+          24.7534,
+          26.2688,
+          27.464,
+          26.4907,
+          25.8386,
+          25.175,
+          24.8486,
+          25.4905,
+          24.0342,
+          26.1112,
+          25.4131,
+          25.6997,
+          23.8183,
+          24.2089,
+          25.0186,
+          22.4148,
+          22.7863,
+          25.0365,
+          24.9956,
+          24.9106,
+          25.9911,
+          25.7369,
+          25.9571,
+          24.2557,
+          27.7336,
+          25.6666,
+          26.8662,
+          25.0208,
+          25.0743,
+          26.392,
+          25.7529,
+          27.2677,
+          27.1554,
+          24.633,
+          25.0644,
+          25.3768,
+          25.4895,
+          27.8846,
+          25.1212,
+          24.4364,
+          25.5648,
+          24.8198,
+          25.5349
+        ],
+        "usable_as_generator": true
+      },
+      "seasonal_differencing": {
+        "label": "ARIMA(1, 0, 0)(0, 1, 1)[12]",
+        "order": [
+          1,
+          0,
+          0
+        ],
+        "seasonal_order": [
+          0,
+          1,
+          1
+        ],
+        "D": 1,
+        "aic": -381.58,
+        "seasonal_strength_after": 0.000351,
+        "acf_at_lag12_after": -0.4499,
+        "monthly_sd_spread": {
+          "by_month": [
+            0.6741,
+            0.5466,
+            0.9402,
+            0.7959,
+            0.8884,
+            0.8364,
+            0.4461,
+            0.3452,
+            0.6137,
+            0.9061,
+            0.9349,
+            0.8097
+          ],
+          "min": 0.3451772399919164,
+          "max": 0.9402246247656978,
+          "ratio": 2.7238893989294213
+        },
+        "ljung_box_pvalue": 0.0715,
+        "arch_pvalue": 0.0644,
+        "Theta": [
+          -0.788779
+        ],
+        "n_seasonal_parameters": 1,
+        "observations_consumed_by_transform": 12,
+        "record_mean": 1.573317115668754e+24,
+        "record_mean_scientific": "1.57e+24",
+        "first_decade_mean": 57.8225,
+        "last_decade_mean_scientific": "1.03e+26",
+        "drift_ratio_scientific": "1.78e+24",
+        "log_scale_first_decade_mean": 3.5087,
+        "log_scale_last_decade_mean": 49.1782,
+        "decade_mean_trajectory": [
+          57.8225,
+          111.988,
+          208.46,
+          382.621,
+          701.32,
+          1188.59,
+          2622.84,
+          4814.81,
+          8053.75,
+          14778.9,
+          21872.6,
+          33951.6,
+          74205.1,
+          140968.0,
+          232256.0,
+          353216.0,
+          630366.0,
+          1080430.0,
+          1714240.0,
+          2749860.0,
+          5210910.0,
+          9958460.0,
+          18301900.0,
+          27174800.0,
+          49830600.0,
+          105397000.0,
+          169590000.0,
+          221082000.0,
+          506608000.0,
+          754552000.0,
+          1463440000.0,
+          3345710000.0,
+          6015810000.0,
+          8532450000.0,
+          10303500000.0,
+          19571400000.0,
+          31915800000.0,
+          50014900000.0,
+          66976500000.0,
+          187238000000.0,
+          267737000000.0,
+          416364000000.0,
+          618041000000.0,
+          1098590000000.0,
+          1760920000000.0,
+          3216830000000.0,
+          4760770000000.0,
+          6467100000000.0,
+          11835900000000.0,
+          19154100000000.0,
+          36067100000000.0,
+          65112900000000.0,
+          150575000000000.0,
+          257877000000000.0,
+          477571000000000.0,
+          638613000000000.0,
+          1053030000000000.0,
+          2602120000000000.0,
+          3742480000000000.0,
+          6704250000000000.0,
+          1.404e+16,
+          2.2792e+16,
+          6.22213e+16,
+          1.25751e+17,
+          2.90744e+17,
+          3.75138e+17,
+          6.97537e+17,
+          9.46285e+17,
+          1.40088e+18,
+          4.41735e+18,
+          6.77265e+18,
+          8.71348e+18,
+          1.85709e+19,
+          2.11887e+19,
+          3.95804e+19,
+          3.58083e+19,
+          6.99396e+19,
+          1.10473e+20,
+          1.60109e+20,
+          2.71121e+20,
+          5.03565e+20,
+          7.7262e+20,
+          1.17815e+21,
+          1.25611e+21,
+          2.17819e+21,
+          3.69576e+21,
+          7.11871e+21,
+          1.62314e+22,
+          3.85362e+22,
+          6.73322e+22,
+          1.24796e+23,
+          3.79353e+23,
+          7.5491e+23,
+          1.26794e+24,
+          2.51398e+24,
+          3.59843e+24,
+          3.88651e+24,
+          1.24984e+25,
+          2.90555e+25,
+          1.03112e+26
+        ],
+        "usable_as_generator": false
+      }
+    },
+    "conecuh": {
+      "basin": "conecuh",
+      "variable": "discharge",
+      "observed_mean": 16.4228,
+      "record_years_generated": 1000,
+      "untreated": {
+        "seasonal_strength": 0.4614,
+        "acf_at_lag12": 0.4405,
+        "monthly_sd_spread": {
+          "by_month": [
+            0.6268,
+            0.5582,
+            0.541,
+            0.6592,
+            0.8626,
+            1.1268,
+            1.2127,
+            1.058,
+            0.9192,
+            0.9579,
+            0.8939,
+            0.8667
+          ],
+          "min": 0.5409528370536062,
+          "max": 1.2126566223126374,
+          "ratio": 2.2417048941227167
+        }
+      },
+      "standardisation": {
+        "label": "ARIMA(1, 0, 1)",
+        "order": [
+          1,
+          0,
+          1
+        ],
+        "aic": -178.81,
+        "seasonal_strength_after": 0.0,
+        "acf_at_lag12_after": -0.003,
+        "monthly_sd_spread": {
+          "by_month": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "min": 0.9999999999999998,
+          "max": 1.0000000000000002,
+          "ratio": 1.0000000000000004
+        },
+        "ljung_box_pvalue": 0.2243,
+        "arch_pvalue": 0.9963,
+        "min_ar_root": 1.3791,
+        "n_seasonal_parameters": 24,
+        "observations_consumed_by_transform": 0,
+        "record_mean": 16.85,
+        "record_max": 1021.0,
+        "record_mean_over_observed": 1.026,
+        "first_decade_mean": 17.2553,
+        "last_decade_mean": 16.5807,
+        "drift_ratio": 0.9609,
+        "decade_mean_trajectory": [
+          17.2553,
+          17.4249,
+          16.6401,
+          16.9729,
+          17.2641,
+          16.2933,
+          16.0054,
+          16.9809,
+          16.6319,
+          16.1663,
+          16.6369,
+          16.6858,
+          15.8611,
+          17.0104,
+          16.5312,
+          16.9975,
+          17.0777,
+          16.5671,
+          16.3421,
+          15.9146,
+          16.5445,
+          17.6203,
+          15.5294,
+          16.6551,
+          16.5509,
+          16.7108,
+          16.5774,
+          18.0176,
+          17.6565,
+          15.3219,
+          16.2182,
+          17.2541,
+          16.6933,
+          18.1828,
+          16.3435,
+          17.7273,
+          16.5322,
+          16.2735,
+          16.344,
+          16.2037,
+          17.9827,
+          16.3861,
+          15.925,
+          16.3166,
+          16.5649,
+          19.2103,
+          17.2164,
+          15.8366,
+          17.5847,
+          16.1919,
+          16.2198,
+          15.9409,
+          17.6761,
+          17.9476,
+          16.8651,
+          16.3172,
+          16.8154,
+          16.3073,
+          16.6196,
+          17.2025,
+          16.8672,
+          17.4527,
+          17.3531,
+          16.2498,
+          17.3492,
+          17.4184,
+          16.5601,
+          15.7399,
+          17.398,
+          17.4827,
+          16.4773,
+          16.7299,
+          17.7131,
+          18.1964,
+          17.2274,
+          17.4636,
+          17.103,
+          16.4005,
+          16.4239,
+          15.4927,
+          16.7039,
+          16.8276,
+          18.0823,
+          16.7246,
+          18.0294,
+          16.4002,
+          17.2821,
+          17.2435,
+          17.4426,
+          16.7461,
+          17.4461,
+          17.7841,
+          16.8413,
+          15.3026,
+          17.3364,
+          17.0634,
+          16.6414,
+          16.2755,
+          17.8001,
+          16.5807
+        ],
+        "usable_as_generator": true
+      },
+      "seasonal_differencing": {
+        "label": "ARIMA(3, 0, 2)(0, 1, 1)[12]",
+        "order": [
+          3,
+          0,
+          2
+        ],
+        "seasonal_order": [
+          0,
+          1,
+          1
+        ],
+        "D": 1,
+        "aic": -231.81,
+        "seasonal_strength_after": 7.5e-05,
+        "acf_at_lag12_after": -0.4819,
+        "monthly_sd_spread": {
+          "by_month": [
+            0.9658,
+            0.7253,
+            0.7834,
+            1.0161,
+            1.2012,
+            1.7638,
+            1.8238,
+            1.5785,
+            1.288,
+            1.1044,
+            1.144,
+            1.1915
+          ],
+          "min": 0.7253147469203981,
+          "max": 1.8237804319051438,
+          "ratio": 2.5144676013395606
+        },
+        "ljung_box_pvalue": 0.7634,
+        "arch_pvalue": 0.8111,
+        "Theta": [
+          -0.907801
+        ],
+        "n_seasonal_parameters": 1,
+        "observations_consumed_by_transform": 12,
+        "record_mean": 7.9038,
+        "record_mean_scientific": "7.9",
+        "first_decade_mean": 33.1554,
+        "last_decade_mean_scientific": "2.58",
+        "drift_ratio_scientific": "0.0778",
+        "log_scale_first_decade_mean": 2.0654,
+        "log_scale_last_decade_mean": -6.0282,
+        "decade_mean_trajectory": [
+          33.1554,
+          39.3292,
+          32.8997,
+          27.2156,
+          27.6185,
+          25.5348,
+          28.6982,
+          25.57,
+          24.8356,
+          23.0914,
+          19.1823,
+          15.8114,
+          21.5842,
+          19.2632,
+          18.5474,
+          16.7448,
+          14.958,
+          14.4869,
+          13.5788,
+          15.0469,
+          12.7506,
+          13.3417,
+          11.668,
+          9.8818,
+          10.9651,
+          12.7806,
+          10.569,
+          8.56445,
+          9.37836,
+          8.93411,
+          9.80009,
+          9.38937,
+          8.52781,
+          6.9977,
+          6.30539,
+          6.25241,
+          5.64229,
+          5.40049,
+          4.15638,
+          5.36097,
+          4.29242,
+          4.10727,
+          4.65784,
+          4.83573,
+          3.55791,
+          5.46697,
+          4.45962,
+          3.34355,
+          3.26537,
+          3.26536,
+          2.80771,
+          3.17837,
+          2.85553,
+          3.53426,
+          3.78808,
+          2.74444,
+          2.56497,
+          3.27981,
+          2.25999,
+          2.8825,
+          3.24549,
+          3.26357,
+          3.83705,
+          5.32802,
+          7.08453,
+          4.03523,
+          5.24732,
+          2.62849,
+          2.29395,
+          3.1997,
+          2.27422,
+          2.59584,
+          2.28219,
+          1.93264,
+          1.64431,
+          2.15954,
+          2.22541,
+          1.77847,
+          1.50903,
+          1.3025,
+          1.4059,
+          1.14983,
+          0.990105,
+          0.645713,
+          0.844028,
+          0.676057,
+          0.712073,
+          1.16251,
+          1.27371,
+          0.944219,
+          1.00844,
+          1.73281,
+          1.48234,
+          1.5377,
+          1.67141,
+          1.34678,
+          0.728442,
+          1.86682,
+          1.78275,
+          2.57982
+        ],
+        "usable_as_generator": false
+      }
+    }
+  },
+  "offset_sensitivity": [
+    {
+      "offset_fraction_of_mean": 0.0,
+      "offset": 0.0,
+      "label": "ARIMA(1, 0, 0)",
+      "monthly_sd_ratio": 5.659,
+      "ljung_box_pvalue": 0.0124,
+      "record_mean": 26.08,
+      "T2": 63.6,
+      "T10": 119.8,
+      "T100": 401.5,
+      "T500": 1105.4
+    },
+    {
+      "offset_fraction_of_mean": 0.002,
+      "offset": 0.0485,
+      "label": "ARIMA(1, 0, 0)",
+      "monthly_sd_ratio": 4.973,
+      "ljung_box_pvalue": 0.0254,
+      "record_mean": 25.78,
+      "T2": 62.9,
+      "T10": 118.3,
+      "T100": 360.8,
+      "T500": 889.1
+    },
+    {
+      "offset_fraction_of_mean": 0.005,
+      "offset": 0.1214,
+      "label": "ARIMA(1, 0, 0)",
+      "monthly_sd_ratio": 4.591,
+      "ljung_box_pvalue": 0.0405,
+      "record_mean": 25.61,
+      "T2": 62.5,
+      "T10": 117.2,
+      "T100": 340.0,
+      "T500": 837.8
+    },
+    {
+      "offset_fraction_of_mean": 0.01,
+      "offset": 0.2427,
+      "label": "ARIMA(1, 0, 0)",
+      "monthly_sd_ratio": 4.267,
+      "ljung_box_pvalue": 0.0592,
+      "record_mean": 25.45,
+      "T2": 62.3,
+      "T10": 116.4,
+      "T100": 316.4,
+      "T500": 733.2
+    },
+    {
+      "offset_fraction_of_mean": 0.02,
+      "offset": 0.4855,
+      "label": "ARIMA(1, 0, 0)",
+      "monthly_sd_ratio": 3.992,
+      "ljung_box_pvalue": 0.0825,
+      "record_mean": 25.26,
+      "T2": 61.9,
+      "T10": 115.8,
+      "T100": 299.2,
+      "T500": 640.7
+    },
+    {
+      "offset_fraction_of_mean": 0.04,
+      "offset": 0.971,
+      "label": "ARIMA(1, 0, 0)",
+      "monthly_sd_ratio": 3.818,
+      "ljung_box_pvalue": 0.1027,
+      "record_mean": 25.04,
+      "T2": 61.6,
+      "T10": 114.7,
+      "T100": 270.2,
+      "T500": 522.7
+    }
+  ]
 }

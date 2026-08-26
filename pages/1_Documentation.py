@@ -52,22 +52,27 @@ st.markdown(
 )
 
 variables = R.get("variables", {})
-basin = R.get("basin", "Conecuh River at Brantley, Alabama (USGS 02371500)")
+meta = R.get("case_study_basin", {})
+contrast_meta = R.get("contrast_basin", {})
+compare = R.get("method_comparison", {})
+basin = meta.get("name", R.get("basin", ""))
+disc = R.get("variables", {}).get("discharge", {})
+n_years_record = disc.get("n_months", 314) // 12
 
 st.title("How This Works")
 st.caption(
-    "River Outlook  ·  Conecuh River at Brantley, Alabama  ·  "
+    f"River Outlook  ·  {basin}  ·  "
     "  ·  2026"
 )
 
 st.markdown(
-    """<div class="callout">
+    f"""<div class="callout">
     <strong>In one sentence:</strong> we don't try to guess the river's flow in any particular
-    future month &mdash; instead, we fit a model to 35 years of measurements and use it to
-    write out a much longer record of the same river, so that the rare floods and droughts a
-    dam or channel has to survive appear often enough to be counted. The rest of this page
-    explains that in as much or as little detail as you want: what the app does, the method
-    behind it, and how to read what it shows you.
+    future month &mdash; instead, we fit a model to {n_years_record} years of Nigerian gauge
+    measurements and use it to write out a much longer record of the same river, so that the
+    rare floods and droughts a dam or channel has to survive appear often enough to be
+    counted. The rest of this page explains that in as much or as little detail as you want:
+    what the app does, the method behind it, and how to read what it shows you.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -80,11 +85,12 @@ This application **generates synthetic monthly discharge records** for the
 **{basin}** — sequences of monthly flow, of whatever length you ask for, that
 behave statistically like the measured river but are far longer than it.
 
-The reason to want one is practical. The gauge has been read for 35 years, which
-gives 35 annual maximum flows. A spillway designed against a 1-in-100-year event
-cannot be sized from 35 numbers. Fitting a model to those 35 years and generating
-1,000 years from it gives 1,000 annual maxima drawn from the same statistical
-behaviour, and the design flow can then be counted rather than guessed.
+The reason to want one is practical. This gauge has been read for {n_years_record} years,
+which gives {n_years_record} annual maximum flows. A spillway designed against a
+1-in-100-year event cannot be sized from {n_years_record} numbers. Fitting a model to those
+{n_years_record} years and generating 1,000 years from it gives 1,000 annual maxima drawn
+from the same statistical behaviour, and the design flow can then be counted rather than
+guessed.
 
 The engine is a **statistical ARIMA model** (Box&ndash;Jenkins methodology) that
 learns the river's temporal behaviour from its own historical record — no
@@ -111,7 +117,7 @@ st.markdown(
     numbers measure — the same code applied to rainfall, to water level, or to any other
     series would select its own orders and estimate its own coefficients. Section 4.7 of the
     report tests exactly this, running the identical unmodified program on three different
-    variables and getting three different answers back. What is fixed here is the
+    variables of a second basin and getting three different answers back. What is fixed here is the
     <em>data</em> the deployed app is wired to, not the method.
     </div>""",
     unsafe_allow_html=True,
@@ -276,16 +282,33 @@ st.markdown(
 | Item | Detail |
 |------|--------|
 | **Basin** | {basin} |
-| **Variables** | Discharge (m&sup3;/s), rainfall (mm/month), stage (m) -- three independent series |
-| **Timestep** | Monthly (aggregated from daily USGS/CAMELS records) |
-| **Record** | Jan 1980 &ndash; Dec 2014 (420 months) |
-| **Training** | 1980&ndash;2003 (model identification & estimation) |
-| **Validation** | 2004&ndash;2014 (out-of-sample property-based assessment) |
-| **Source** | USGS NWIS (discharge, stage); CAMELS/Daymet basin-mean forcing (rainfall) |
+| **Station** | GRDC 1837401 / GSIM NG_0000012, 12.44&deg;N 10.03&deg;E |
+| **Catchment area** | 30,435 km&sup2; |
+| **Climate** | Sahelian / semi-arid, single wet season (June-October) |
+| **Variable** | Monthly mean discharge (m&sup3;/s) |
+| **Record** | 1980-01 &ndash; 2006-02 (314 months, 8 interpolated) |
+| **Training** | 1980&ndash;1999 (model identification &amp; estimation) |
+| **Validation** | 2000&ndash;2006 (out-of-sample, property-based) |
+| **Source** | Nigerian national gauging network, via the Global Runoff Data Centre and the Global Streamflow Indices and Metadata Archive (Do et al., 2018; Gudmundsson et al., 2018) |
 
-Discharge and stage come directly from USGS gauge 02371500; rainfall is the Daymet
-basin-mean product from the CAMELS archive for the same basin (the only one of the three
-rainfall products in that archive with zero missing days across the full record).
+The record originates from Nigeria's own gauging network, was archived by the Global
+Runoff Data Centre and was quality-controlled and republished with a DOI and an open
+licence in the GSIM archive. It needed no institutional data request and can be
+re-downloaded by anyone wanting to reproduce this work.
+
+**Why this station, and why this window.** Twenty-four Nigerian stations are held in that
+archive. This one has the longest usable record and much the least missing data &mdash;
+3.7% of months over 1963&ndash;2006, longest gap three months. The window starts in 1980
+because Tiga Dam (1974) changed the river's regime upstream of the gauge and a generating
+model needs one consistent regime; independently, 36 of the 44 poorly-gauged months in the
+archive fall before 1980 and only 8 after it.
+
+**A second river, as a control.** The Conecuh River at Brantley in Alabama (humid subtropical, rainfall in every month)
+is carried through the whole analysis alongside the Hadejia. It is not a second subject of
+study. The comparison between the two ways of removing the annual cycle (Section 3 above,
+and the "for the curious" panel on the main page) would be worth little if it had been run
+on one river only: a single catchment cannot separate a property of the two methods from a
+property of that catchment. The two chosen differ about as widely as gauged rivers can.
 """
 )
 
@@ -379,7 +402,7 @@ will differ every time, and that is expected, not a bug. What you'll see:
   real river.
 - **An extremes card** on the right: highest and lowest month, 95th and 99th percentiles.
 - **A "track record" tag**, showing how many of seven statistical properties of the real
-  2004-2014 record fell inside the simulated 90% envelope. This is evidence of property
+  held-out record fell inside the simulated 90% envelope. This is evidence of property
   reproduction, not a forecast-accuracy percentage.
 - **A "for the curious" section** with the full statistical detail -- coefficients and
   standard errors, the twelve seasonal parameters, the stationarity evidence, and the
@@ -399,11 +422,14 @@ st.markdown(
 | Limitation | Implication |
 |-----------|-------------|
 | **Univariate** | The model uses only discharge's own past; it cannot anticipate a rainfall event that has not yet reached the river. |
-| **Fixed seasonal component** | The annual cycle is stored as twelve constant monthly parameters. The record itself says this is an approximation: the cycle at this gauge weakened measurably over 35 years (amplitude 35.2 m³/s in 1980-89 and 43.5 in 1990-99, against 25.8 in 2004-14). That change is exactly what the one failing property check detects. A periodic model with time-varying seasonal parameters would represent it better. |
+| **Fixed seasonal component** | The annual cycle is stored as twelve constant monthly means and twelve standard deviations, all treated as unchanging. A periodic model with time-varying seasonal parameters would represent a shifting regime better. |
+| **Decadal non-stationarity** | This is the big one for this river. The record spans the Sahel drought and the rainfall recovery that followed: the estimation period averages 19.8 m³/s and the held-out period 38.7. A stationary model fitted to the first cannot reproduce the level of the second, and that is exactly the property check it fails. It reproduces the river's shape &mdash; variability, skewness, seasonal amplitude, low-flow duration, peak &mdash; and gets the level wrong. |
+| **Regulated river** | Tiga Dam and Challawa Gorge Dam control much of the flow reaching this gauge, and Challawa was commissioned in 1992, inside the analysis window. The model describes a regulated river, and any design figure from it assumes the reservoirs keep being operated broadly as they were. |
+| **Log offset is a convention** | Dry-season monthly means reach zero, so a constant of 1% of mean flow is added before taking logarithms. Its influence has been measured: negligible for the mean and the frequent floods, more than a factor of two on the 500-year value. |
 | **Linear model, unbounded tail** | Catchment response during extreme events is partly non-linear and not fully captured. The log-linear form also has **no upper bound**, so the single largest value in a long generated record is governed by the assumed distribution rather than by any physical limit of the channel. Use the return periods, not the record maximum. |
-| **Parameters treated as known** | The generated record propagates the randomness of the process but not the *sampling uncertainty of the fitted coefficients themselves*. The return-period estimates are therefore more precise-looking than the 35 years of evidence strictly warrant. |
-| **No new information** | Generating 1,000 years does not add knowledge the 35-year record did not contain; it works out the consequences of the fitted structure more fully. Estimates near the observed range are well supported, and become progressively more model-dependent beyond it. |
-| **Primary basin** | The full stochastic property-based validation covers this basin only. A supplementary check reran the identification and estimation procedure, unmodified, on two further CAMELS basins (one arid, one humid continental with snow) for discharge and rainfall: it ran cleanly on both, but its qualitative findings did not universally repeat, and two of the four extra fits showed numerical warning signs. So the *procedure* transfers; the *specific results* are not claimed to. |
+| **Parameters treated as known** | The generated record propagates the randomness of the process but not the *sampling uncertainty of the fitted coefficients themselves*. The return-period estimates are therefore more precise-looking than 26 years of evidence strictly warrant. |
+| **No new information** | Generating 1,000 years does not add knowledge the 26-year record did not contain; it works out the consequences of the fitted structure more fully. Estimates near the observed range are well supported, and become progressively more model-dependent beyond it. |
+| **One basin's design figures** | The design discharges here are for this gauge alone. What has been shown to transfer is the *procedure*, and the finding about the two ways of removing the annual cycle, which was reproduced on the Conecuh River at Brantley in a completely different climate. The specific numbers are not claimed to transfer anywhere. |
 | **Stationarity assumed** | Every generated record assumes the process estimated from the observed period continues to govern the basin unchanged — which climate change, land-use change, reservoir construction, river engineering, urbanisation, or a change to the gauge would each break. A stationary model cannot represent any of them. |
 """
 )
@@ -425,14 +451,17 @@ finals_project/
 │   ├── 0_Forecast.py      ← synthetic record generator
 │   └── 1_Documentation.py ← this page
 ├── src/
-│   ├── preprocess.py      ← monthly loaders (discharge, rainfall, stage)
+│   ├── preprocess.py      ← monthly loaders, log transform, deseasonalisation
 │   ├── model.py           ← ARIMA + ADF/KPSS/ACF/PACF/Ljung-Box + standard errors
 │   ├── calibrate.py       ← stationarity + AIC order selection
-│   ├── simulate.py        ← stochastic synthetic-ensemble generation
+│   ├── simulate.py        ← stochastic synthetic-record generation
 │   ├── validation.py      ← property-based validation
-│   └── metrics.py         ← summary statistics
-├── data/results.json      ← per-variable model + validation results
-└── run_pipeline.py        ← full pipeline runner
+│   ├── forecast.py        ← residual diagnostics
+│   └── plots.py           ← the figures, including the method comparison
+├── data/
+│   ├── hadejia_discharge_monthly.csv  ← the Nigerian case-study record
+│   └── results.json                   ← model + validation + comparison results
+└── run_pipeline.py        ← full pipeline runner (both basins, both methods)
 ```
 
 **Run locally:**
@@ -460,12 +489,16 @@ st.markdown(
   contiguous USA. *HESS*, 19(1), 209&ndash;223.
 - Salas, J. D., Delleur, J. W., Yevjevich, V., & Lane, W. L. (1980). *Applied modeling of hydrologic
   time series*. Water Resources Publications.
+- Do, H. X., Gudmundsson, L., Leonard, M., & Westra, S. (2018). The Global Streamflow Indices and
+  Metadata Archive (GSIM) &ndash; Part 1. *Earth System Science Data*, 10(2), 765&ndash;785.
+- Gudmundsson, L., Do, H. X., Leonard, M., & Westra, S. (2018). The Global Streamflow Indices and
+  Metadata Archive (GSIM) &ndash; Part 2. *Earth System Science Data*, 10(2), 787&ndash;804.
 """
 )
 
 st.markdown("---")
 st.caption(
-    "Conecuh River Synthetic Record Generator  ·  "
+    f"{meta.get('short_name', 'River')} Synthetic Record Generator  ·  "
     "Stochastic hydrology with ARIMA"
     "  ·  "
 )
