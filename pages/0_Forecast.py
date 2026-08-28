@@ -503,6 +503,18 @@ with center:
                     "last. Standardisation stays put - record mean "
                     f"{sd['record_mean']:.1f} {UNIT}, drift "
                     f"{sd['drift_ratio']:.3f}.")
+                st.caption(
+                    "That figure looks like an arithmetic error and is not one. "
+                    "On the log scale, where exponentiation is not magnifying "
+                    "anything, the generated mean simply walks from "
+                    f"{sdd['log_scale_first_decade_mean']:.2f} to "
+                    f"{sdd['log_scale_last_decade_mean']:.2f} over the record - "
+                    "the ordinary signature of a random walk. Undoing a seasonal "
+                    "difference is a running total, so the variance of the "
+                    "generated level grows in proportion to the length of the "
+                    "record and has no upper bound. Both branches here are run "
+                    "by the same code, from the same residual pool, under the "
+                    "same seeds; only the transform differs. Report Section 4.2.")
                 if cc.get("seasonal_differencing"):
                     st.caption(
                         "The same comparison was run unchanged on a river in a "
