@@ -1,11 +1,9 @@
 """
 validation.py — Property-based (stochastic) validation.
 
-Added 2026-08-12, replacing point-forecast-vs-observed comparison per
-reviewer instruction: "we don't need the answers to be the same. We just
-need the properties of the things you forecasted to be similar to the
-original... it's the variability that we want to see, not the exact value...
-[for] sizing reservoirs, sizing spillways."
+The answers need not be the same; the properties of what is generated need
+to match the original. For sizing reservoirs and spillways it is the
+variability that matters, not any exact value.
 
 Rather than scoring one forecast against the one sequence that happened to
 follow, this module characterises the historical record by a set of

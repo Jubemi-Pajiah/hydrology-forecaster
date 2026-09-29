@@ -1,9 +1,6 @@
 """
 pages/1_Documentation.py — Documentation and user guide for the statistical
 (ARIMA) hydrological forecasting app.
-
-Rewritten 2026-08-12 for the monthly, three-variable, stochastic-validation
-pipeline.
 """
 import json
 from pathlib import Path
@@ -61,8 +58,7 @@ n_years_record = disc.get("n_months", 314) // 12
 
 st.title("How This Works")
 st.caption(
-    f"River Outlook  ·  {basin}  ·  "
-    "  ·  2026"
+    f"River Outlook  ·  {basin}"
 )
 
 st.markdown(
@@ -115,8 +111,8 @@ st.markdown(
     numbers, tests it for seasonality and stationarity, searches for the orders that best
     describe it, and generates from the result. Nothing in that sequence knows what the
     numbers measure — the same code applied to rainfall, to water level, or to any other
-    series would select its own orders and estimate its own coefficients. Section 4.7 of the
-    report tests exactly this, running the identical unmodified program on three different
+    series would select its own orders and estimate its own coefficients. The contrast-basin run
+    tests exactly this, running the identical unmodified program on three different
     variables of a second basin and getting three different answers back. What is fixed here is the
     <em>data</em> the deployed app is wired to, not the method.
     </div>""",
@@ -184,7 +180,7 @@ st.markdown(
     average of around 10<sup>10</sup> m³/s against a measured average of 16.4. Seasonal
     standardisation leaves a <em>stationary</em> process, so a record of any length stays a
     sample of the same distribution. Since generating long records is the whole purpose,
-    standardisation is what the model uses. Section 4.2 of the report gives the numbers.
+    standardisation is what the model uses.
     </div>""",
     unsafe_allow_html=True,
 )
@@ -305,8 +301,7 @@ archive fall before 1980 and only 8 after it.
 
 **A second river, as a control.** The Conecuh River at Brantley in Alabama (humid subtropical, rainfall in every month)
 is carried through the whole analysis alongside the Hadejia. It is not a second subject of
-study. The comparison between the two ways of removing the annual cycle (Section 3 above,
-and the "for the curious" panel on the main page) would be worth little if it had been run
+study. The comparison between the two ways of removing the annual cycle (above, and the "for the curious" panel on the main page) would be worth little if it had been run
 on one river only: a single catchment cannot separate a property of the two methods from a
 property of that catchment. The two chosen differ about as widely as gauged rivers can.
 """
@@ -372,7 +367,7 @@ score (CRPS), the logarithmic score, calibration plots, rank histograms, or the 
 score for threshold exceedance. The property-based validation used here is one such
 distribution-level comparison, chosen because the properties it tests are the ones that
 govern water-resources design. The scores just listed are complementary to it, not ruled
-out by it, and are noted as future work in the report.
+out by it, and are natural extensions.
 """
 )
 
@@ -500,5 +495,4 @@ st.markdown("---")
 st.caption(
     f"{meta.get('short_name', 'River')} Synthetic Record Generator  ·  "
     "Stochastic hydrology with ARIMA"
-    "  ·  "
 )

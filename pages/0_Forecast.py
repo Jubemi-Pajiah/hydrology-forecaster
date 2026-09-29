@@ -1,11 +1,10 @@
 """
 0_Forecast.py — Streamlit synthetic-record generator.
 
-Rebuilt 2026-08-19 (v4). The app previously asked for a future date range
-("predict from X to Y") and displayed a band through it. That framing was
-wrong twice over. It implied the model predicts named future months, which
-it does not, and the date window was in any case statistically meaningless:
-the fitted process is stationary, so every window of a given length is
+The app deliberately does not ask for a future date range. A date-based
+framing would imply the model predicts named future months, which it does
+not, and a date window would be statistically meaningless anyway: the
+fitted process is stationary, so every window of a given length is
 identically distributed and slicing one out of the middle of a simulation
 returns the same thing as taking it from the start.
 
@@ -79,11 +78,11 @@ def load_monthly(variable: str = VARIABLE, basin: str = BASIN):
 
 @st.cache_resource
 def fit_model(variable: str = VARIABLE):
-    """Rebuild the model from the coefficients reported in the report.
+    """Rebuild the model from the coefficients stored in data/results.json.
 
     The app never re-estimates anything: it loads the coefficients from the
     same data/results.json that run_pipeline.py wrote, so what a user
-    generates here comes from exactly the model the report describes.
+    generates here comes from exactly the model the pipeline fitted.
     """
     r = load_results()["variables"][variable]
     fr = r["full_record"]
@@ -514,7 +513,7 @@ with center:
                     "generated level grows in proportion to the length of the "
                     "record and has no upper bound. Both branches here are run "
                     "by the same code, from the same residual pool, under the "
-                    "same seeds; only the transform differs. Report Section 4.2.")
+                    "same seeds; only the transform differs.")
                 if cc.get("seasonal_differencing"):
                     st.caption(
                         "The same comparison was run unchanged on a river in a "
@@ -527,7 +526,7 @@ with center:
                         f"{cc['seasonal_differencing']['record_mean']:.1f} against a "
                         f"measured {cc['observed_mean']:.1f}. Failing on two rivers "
                         "with almost nothing in common is what makes this a property "
-                        "of the method rather than of one river. Report Section 4.2.")
+                        "of the method rather than of one river.")
                 st.dataframe(pd.DataFrame([
                     {"": "Seasonal spread left behind (max/min monthly SD)",
                      "Standardisation": f"{sd['monthly_sd_spread']['ratio']:.2f}",
@@ -563,8 +562,7 @@ with center:
                    "leaves an integrated process whose spread grows without limit, "
                    "which is the same reason differencing at lag 12 is not used. What "
                    "the tests are picking up is the multi-decade drought and recovery "
-                   "in the record, not a defect of the deseasonalisation. Report "
-                   "Section 4.3."
+                   "in the record, not a defect of the deseasonalisation."
                    if d_ind else
                    "The tests indicate d = 0, so no differencing is applied."))
 
@@ -592,7 +590,7 @@ with center:
                 "variability, the skewness, the seasonal amplitude, the low-flow "
                 "duration and the peak — the shape of the river is right and the "
                 "level is not. This is a finding about the climate record rather than "
-                "a fault in the fit; see Section 4.7 of the report.")
+                "a fault in the fit.")
 
 # ── Right rail: the extremes ──────────────────────────────────────────────────
 with right:

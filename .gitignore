@@ -4,23 +4,20 @@
 # Large raw data — do not commit
 basin_timeseries_v1p2_metForcing_obsFlow.zip
 data/*.csv
-POWER_Point_Daily_19900101_20201231_007d50N_003d50E_LST.csv
 
 # ...but DO commit the small cached discharge/rainfall/stage series so the
 # deployed app (and the pipeline) can run without the 3.4 GB raw archive or
 # a live NWIS fetch.
+!data/hadejia_discharge_monthly.csv
 !data/conecuh_discharge.csv
 !data/conecuh_rainfall.csv
 !data/conecuh_gage_height_raw.csv
 
-# Transient run logs (e.g. archive/logs/)
+# Transient run logs
 *.log
 
-# Generated outputs — do not commit (lives in documents/)
-
-# Project tooling — do not commit
-PROJECT_CONTEXT.md
-write_document.py
+# Local AI-assistant notes — do not commit
+CLAUDE.md
 
 # Python
 __pycache__/

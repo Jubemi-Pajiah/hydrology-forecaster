@@ -1,11 +1,10 @@
 """
 simulate.py — Stochastic synthetic-sequence generation from a fitted ARIMA model.
 
-Added 2026-08-12 per reviewer instruction: the project's original validation
-compared a single forecast to the single observed sequence that followed,
-which he called meaningless for a stochastic model ("each forecast is
-different... you cannot compare... you can only compare the parameters of
-what you forecast to the parameters of your original data"). This module
+Comparing a single forecast to the single observed sequence that followed
+is the wrong test for a stochastic model: each realisation is different, and
+only the statistical properties of what it generates should match those of
+the observed record. This module
 generates an ENSEMBLE of independent synthetic realisations from the fitted
 model; validation.py then compares the *distribution* of each realisation's
 statistical properties to the historical record, not point values.

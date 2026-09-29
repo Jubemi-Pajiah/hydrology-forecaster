@@ -5,10 +5,10 @@ The module once also held the evaluation machinery of the daily point-forecast
 pipeline: rolling-origin k-step forecasts scored against a persistence
 benchmark by Nash-Sutcliffe efficiency and a skill score, with a lognormal
 retransformation correction applied to each point forecast. That pipeline was
-superseded on 2026-08-12, when validation moved from point-forecast comparison
-to property-based comparison of a stochastic ensemble (see run_pipeline.py and
-validation.py), and the code was removed on 2026-08-25 rather than left to
-suggest that a skill score is still the reported result. It is not.
+superseded when validation moved from point-forecast comparison to
+property-based comparison of a stochastic ensemble (see run_pipeline.py and
+validation.py), and the code was removed rather than left to suggest that a
+skill score is the reported result. It is not.
 
 The ARIMA class itself retains its forecasting methods (``forecast``,
 ``rolling_kstep``, ``kstep_logvar`` in model.py) because producing a k-step

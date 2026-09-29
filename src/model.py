@@ -407,7 +407,7 @@ class ARIMA:
         return c, phi, theta, Phi, Theta
 
     def label(self) -> str:
-        """Model order as it is reported in the report and the web app."""
+        """Model order as it is reported in results.json and the web app."""
         base = f"ARIMA({self.p}, {self.d}, {self.q})"
         if self.P or self.D or self.Q:
             base += f"({self.P}, {self.D}, {self.Q})[{self.s}]"
@@ -426,7 +426,7 @@ class ARIMA:
         recover the residuals and the error variance, which is all the
         forecasting and bias-correction methods need. Used by the web app so it
         starts in seconds rather than re-fitting on every cold start, and it
-        forecasts from exactly the coefficients reported in the report.
+        forecasts from exactly the coefficients the pipeline estimated.
         """
         self = cls(tuple(order), tuple(seasonal_order), s)
         self.c = float(c)
@@ -534,9 +534,7 @@ class ARIMA:
     def standard_errors(self) -> dict:
         """
         Asymptotic standard errors of the estimated coefficients (c, phi,
-        theta) -- the piece of the estimation this project's reviewer
-        singled out as missing ("how do you estimate the parameters? that's
-        where the work is").
+        theta).
 
         For pure AR(p) (q = 0) these are the exact OLS standard errors from
         the fit's normal equations. For mixed ARMA(p, q) (q > 0), estimated

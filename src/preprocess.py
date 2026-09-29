@@ -120,7 +120,7 @@ def log_transform(flow: np.ndarray, offset: float = 0.0) -> np.ndarray:
     drought years, to exactly zero. Without an offset a single such month maps
     to a log value several standard deviations below every other observation
     and dominates the monthly variance it belongs to. The constant used and the
-    sensitivity of the results to it are reported in the methodology.
+    sensitivity of the results to it are measured by run_pipeline.offset_sensitivity.
     """
     x = np.asarray(flow, dtype=float) + float(offset)
     return np.log(np.maximum(x, LOG_EPS))
@@ -167,7 +167,7 @@ def deseasonalise(values: np.ndarray, months: np.ndarray, profile: dict) -> np.n
     therefore what makes a synthetic record of arbitrary length well defined.
     Seasonal differencing, x(t) - x(t-12), also removes the cycle but leaves an
     integrated process whose variance grows without bound, so it cannot be used
-    to generate one (see Section 4.2).
+    to generate one (see run_pipeline.compare_deseasonalising_methods).
     """
     means = np.asarray(profile["means"], dtype=float)
     sds = np.asarray(profile["sds"], dtype=float)
@@ -220,9 +220,8 @@ def split_dataset(df: pd.DataFrame):
 # ----------------------------------------------------------------------------
 # Monthly, multi-variable loading (discharge, rainfall, stage)
 #
-# Added 2026-08-12 per reviewer instruction: monthly timestep instead of
-# daily, and three independent univariate series instead of discharge-only.
-# All three are drawn from the same USGS 02371500 / CAMELS 02371500 basin.
+# Monthly timestep, and three independent univariate series (discharge,
+# rainfall, stage) to show the method generalises across variables. All three are drawn from the same USGS 02371500 / CAMELS 02371500 basin.
 # ----------------------------------------------------------------------------
 RAINFALL_CSV = DATA_DIR / "conecuh_rainfall.csv"
 STAGE_CSV = DATA_DIR / "conecuh_gage_height_raw.csv"
@@ -299,7 +298,7 @@ def build_monthly_dataset(variable: str) -> pd.DataFrame:
                     positive at monthly resolution for this basin -- checked
                     during data acquisition (2026-08-12), not assumed.
     The count of months that needed interpolation is stashed in
-    df.attrs["n_fully_missing_months"] for reporting in the methodology.
+    df.attrs["n_fully_missing_months"] for reporting.
     """
     if variable not in VARIABLE_LOADERS:
         raise ValueError(f"Unknown variable {variable!r}; choose from {list(VARIABLE_LOADERS)}")
@@ -337,11 +336,9 @@ if __name__ == "__main__":
 # ============================================================================
 # Nigerian case study — Hadejia River at Hadejia
 #
-# Added 2026-08-25. The reviewer's objection to the previous version was
-# that the study was carried out on an American river and therefore said
-# nothing about Nigerian hydrology. The case study is now a Nigerian gauge;
-# the Conecuh is retained only as a contrasting climatic regime against which
-# the deseasonalisation comparison of the results is judged.
+# The case study is a Nigerian gauge; the Conecuh is retained only as a
+# contrasting climatic regime against which the deseasonalisation comparison
+# is judged.
 #
 # Provenance. The record originates from the Nigerian national gauging
 # network, was archived by the Global Runoff Data Centre (GRDC station
@@ -398,7 +395,7 @@ HADEJIA_MIN_DAY_FRACTION = 0.5
 
 # Offset added before the log transform, as a fraction of the mean flow of the
 # analysis window. One per cent is a conventional small offset; the
-# methodology reports the sensitivity of every design figure to this choice,
+# pipeline reports the sensitivity of every design figure to this choice,
 # which is negligible except in the far tail.
 HADEJIA_OFFSET_FRACTION = 0.01
 
