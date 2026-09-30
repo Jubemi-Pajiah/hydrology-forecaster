@@ -124,3 +124,7 @@ The app never re-estimates the model. It loads the coefficients from
   of Hydrologic Time Series*. Water Resources Publications.
 - Gneiting, T. and Raftery, A. E. (2007). Strictly proper scoring rules, prediction,
   and estimation. *JASA*, 102(477), 359–378.
+
+## License
+
+[MIT](LICENSE)
