@@ -1,4 +1,4 @@
-# Hydrology Forecaster — Synthetic River Records with ARIMA
+# Hydrology Forecaster: Synthetic River Records with ARIMA
 
 A stochastic-hydrology engine and web app that fits a Box–Jenkins ARIMA model to a
 monthly river-discharge record and uses it to **generate synthetic records of any
